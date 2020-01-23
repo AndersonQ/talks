@@ -1,0 +1,415 @@
+Writing a code generator to make your code more secure
+
+22nd January 2020
+
+Anderson Queiroz
+Lead Backend Engineer
+
+Blacklane
+
+@AinSoph
+
+contato@andersonq.eti.br
+
+https://www.linkedin.com/in/andersonq/
+
+https://github.com/AndersonQ/talks
+
+* whoami
+
+- Brazilian
+
+- Living in Berlin for 2 years
+
+- 15 years coding experience
+
+- ~2.5 years writing Go
+
+.image imgs/gopher.png _ 290
+
+.caption _Gopher_ by [[https://gopherize.me][gopherize.me]]
+
+* Working at
+
+.image imgs/blacklaneGopher.png _ 1000
+
+*We're* *hiring!* (https://www.blacklane.com/en/career/)
+
+* Motivation
+
+GopherCon UK 2019 + Go Time #101: Security for Gophers
+
+.image imgs/witch-learning.svg
+.caption _Gopher_ by [[https://github.com/egonelbre/gophers][Egon Elbre]]
+
+* Agenda
+
+- *Code* *generator* *definition*
+- Why they are useful
+- Our scenario
+- Manual approach
+- Generating code
+- Running it
+
+* Code Generator?
+
+I haven't found a proper formal definition, but let's check a few:
+
+- A code generator is a tool or resource that generates a particular sort of code or computer programming language. _(techopedia.com)_
+
+- In computing, code generation is the process by which a compiler's code generator converts some intermediate representation of source code into a form that can be readily executed by a machine. _(Wikipedia)_
+
+- A program that writes a program
+
+- Anything capable of writing (generating) code
+
+Are we code generators then? Well, we could say so
+
+For us today, let's define a _code_ _generator_ as:
+
+- a program which writes code
+
+* Examples:
+
+- go test: it scans the packages to be tested, writes out a Go program containing a test harness customized for the package, and then compiles and runs it;
+- Yacc: reads in a description of a grammar and writes out a program to parse that grammar.
+- protoc: Protocol Buffers'compiler
+
+sources:
+(https://blog.golang.org/generate)
+(https://github.com/protocolbuffers/protobuf)
+
+* Agenda
+
+- Code generator definition and examples
+- *Why* *they* *are* *useful*
+- Our scenario
+- Manual approach
+- Generating code
+- Running it
+
+* Why they are useful
+
+They automate writing code which would be too expensive to us humans to write.
+
+Either because we'd need to be quite knowledgeable in some area, e.g. Protocol Buffers, or too repetitive e.g. stringer.
+
+further reading: https://blog.golang.org/generate nice article exploring how to use code generators with Go.
+
+* Agenda
+
+- Code generator definition and examples
+- Why they are useful
+- *Our* *scenario*
+- Manual approach
+- Generating code
+- Running it
+
+* Our scenario
+
+We deal with sensitive data all the time, even more now with GDPR.
+Username and passwords, access tokens, client secrets, secret keys, data which personally identify people and so on.
+
+When writing a program, it's normal to face some obstacles, we've followed all the steps in the docs, all looks fine, but still, it does not work.
+
+So, debug time!
+Even better let's print debug it all. It's just on my machine, at most on some testing/QA environment. The code will be code reviewed, no way the debug can make to production.
+
+Never put your trust on it. I've seen such print debug almost making to production after have been code reviewed.
+
+: In go we can easily decide how a type will be printed, and therefore, avoid such leaks.
+
+: When writing a program, it's normal to face some obstacles, authentication flows such as Oauth 2.0, JWT are well defined.
+: However sometimes the API we're interacting with is not well defined, the code looks right, but it doesn't work. I can't
+: get my authentication token, the JWT token is not parsable, but you are sure all is right. So, debug time! Even better
+: let's print debug it all. It's just on my machine, at most on some testing/QA environment. The code will be code reviewed,
+: no way the debug can make to production.
+
+: Never put your trust on it. I've seen such print debug almost making to production after have been code reviewed.
+: In go we can easily decide how a type will be printed, and therefore, avoid such leaks.
+
+* Agenda
+
+- Code generator definition and examples
+- Why they are useful
+- Our scenario
+- *Proposed* *solution*
+- Generating code
+- Running it
+
+* Proposed solution
+
+For simplicity, let's say we have a struct holding our user's credentials
+
+.code snippets.go /start_Credentials OMIT/,/end_Credentials OMIT/
+
+In go we can easily decide how a type will be printed, and therefore, avoid such leaks.
+
+If we want to prevent it to be printed, we can implement the `Stringer` interface and print something else instead.
+
+* Proposed solution
+
+.code snippets.go /start_CredentialsString OMIT/,/end_CredentialsString OMIT/
+
+Let's give it a try:
+
+.play exec1/main.go /start_CredentialsPrintDebugExec OMIT/,/end_CredentialsPrintDebugExec OMIT/
+
+* What happened?
+Let's have a look at the docs:
+ 
+.code exec1/main.go /start_Stringer OMIT/,/end_Stringer OMIT/
+
+looks fine... but if you keep scrolling down the code...
+
+* What happened?
+
+Just below, we find:
+
+.code exec1/main.go /start_GoStringer OMIT/,/end_GoStringer OMIT/
+
+* Let's try now
+
+.code exec2/main.go /start_GoStringer OMIT/,/end_GoStringer OMIT/
+
+.play exec2/main.go /start_CredentialsPrintDebugExec OMIT/,/end_CredentialsPrintDebugExec OMIT/
+
+* and now, keeping repeating it?
+
+* Let's generate this code!
+
+* Agenda
+
+- Code generator definition and examples
+- Why they are useful
+- Our scenario
+- Manual approach
+- *Generating* *code*
+- Running it
+
+* Our code generation tool
+
+*obfuscate*, a code generation tool to obfuscate sensitive information when printing Go types
+
+*Requirements*:
+Given a type, implement the `Stringer` and `GoStringer` interfaces to obfuscate the data when printing it.
+
+*Input*:
+ - type name
+ - go package
+
+*Output*:
+ - a go file with the generated code
+
+* Generating code - Agenda
+
+- *load* *the* *go* *package*
+- lookup for the type
+- implement the `Stringer` and `GoStringer` interfaces
+- save to `gen_[TYPE_NAME]_obfuscated.go`
+- run `goimports` on `gen_[TYPE_NAME]_obfuscated.go`
+
+* Loading a Go package
+
+We'll use the Go tool `packages`
+
+  Package packages loads Go packages for inspection and analysis.
+
+It returns a data struct representing a package. *It's* *Go* *code* *as* *data!* Not just a huge text hard to infer meaning from.
+
+* Loading a Go package (code)
+
+.code ../main.go /start_loadConf OMIT/,/end_loadConf OMIT/
+
+*Mode* controls which information will be returned. The docs fully explain which each of them means.
+
+*Tl;dr*: we are loading, types and information about them, syntax and names.
+
+* Loading a Go package (code)
+
+For simplicity we'll only deal with one package and one type at a time.
+
+.code ../main.go /start_loadPkg OMIT/,/end_loadPkg OMIT/
+
+* Generating code - Agenda
+
+- load the go package
+- *lookup* *for* *the* *type* *to* *obfuscate*
+- implement the `Stringer` and `GoStringer` interfaces
+- save to `gen_[TYPE_NAME]_obfuscated.go`
+- run `goimports` on `gen_[TYPE_NAME]_obfuscated.go`
+
+* Searching the type
+
+*Types*: type information for the loaded package
+*Scope()*: the objects declared, type names, variables, constants and functions
+*Lookup()*: the object with the given name
+
+if all succeed, we'll be holding our type!
+
+.code ../main.go /start_searchType OMIT/,/end_searchType OMIT/
+
+* Generating code - Agenda
+
+- load the go package
+- lookup for the type
+- *implement* *the* *Stringer* *and* *GoStringer* *interfaces*
+- save to `gen_[TYPE_NAME]_obfuscated.go`
+- run `goimports` on `gen_[TYPE_NAME]_obfuscated.go`
+
+* What we'll write
+
+Now we found out type in the code, we can implement the `Stringer` and `GoStringer` interfaces.
+
+We want something like:
+
+  func (t typeName) String() string { return "*****" }
+  func (t typeName) GoString() string { return "*****" }
+
+* Writing the code
+
+We can use the package `text/template` to write our code
+
+.code ../main.go /start_tmpl OMIT/,/end_tmpl OMIT/
+
+* Let's play a bit
+
+For the propose of exploring the information we have about our type we'll divide it in two cases:
+
+- The underlying type is a string:
+  type Password string
+
+- or it's something else, such as:
+  type Secret struct {
+      Key1 string
+      Key2 int
+  }
+
+if its underlying type is a string, we'll print n *, where n is the length of the string, 10 * otherwise
+
+* Checking the underlying type
+
+It couldn't be easier:
+
+.code ../main.go /start_underlyingType OMIT/,/end_underlyingType OMIT/
+
+and then we choose one of the two as our implementation
+
+.code ../main.go /start_tmplPrint OMIT/,/end_tmplPrint OMIT/
+.code ../main.go /start_chooseTmpl OMIT/,/end_chooseTmpl OMIT/
+
+* Generating the code
+
+.code ../main.go /start_generateCode OMIT/,/end_generateCode OMIT/ HLunderlyingString
+
+* Generating the code
+
+Here we gather the data to fill in our template
+
+.code ../main.go /start_generateCode OMIT/,/end_generateCode OMIT/ HLtmplVars
+
+* Generating the code
+
+We parse our template choosing it based on the underlying type of our type
+
+.code ../main.go /start_generateCode OMIT/,/end_generateCode OMIT/ HLparseTmpl
+
+* Generating the code
+
+Finally we execute it. `w` is the file where we'll save our code
+
+.code ../main.go /start_generateCode OMIT/,/end_generateCode OMIT/ HLexecuteTmpl
+
+* Generating code - Agenda
+
+- load the go package
+- lookup for the type
+- implement the `Stringer` and `GoStringer` interfaces
+- *save* *to* *gen_[TYPE_NAME]_obfuscated.go*
+- run `goimports` on `gen_[TYPE_NAME]_obfuscated.go`
+
+* Save the generated code
+
+We just need a file to write our template to, after having written it, we close the file
+
+.code ../main.go /start_fileName OMIT/,/end_fileName OMIT/
+.code ../main.go /start_createFile OMIT/,/end_createFile OMIT/
+.code ../main.go /start_closeFile OMIT/,/end_closeFile OMIT/
+
+* Generating code - Agenda
+
+- load the go package
+- lookup for the type
+- implement the `Stringer` and `GoStringer` interfaces
+- save to `gen_[TYPE_NAME]_obfuscated.go`
+- *run* *goimports* *on* *gen_[TYPE_NAME]_obfuscated.go*
+
+* goimport the code
+
+Now we have our code written to a file, let's `goimport` it just to make sure all is fine
+
+We just call `goimports` from the cli
+.code ../main.go /start_runGoimport OMIT/,/end_runGoimport OMIT/
+
+* Generating code - Agenda
+
+- load the go package
+- lookup for the type
+- implement the `Stringer` and `GoStringer` interfaces
+- save to `gen_[TYPE_NAME]_obfuscated.go`
+- run `goimports` on `gen_[TYPE_NAME]_obfuscated.go`
+- *all* *together*
+
+* Putting it all together
+
+.code ../main.go /start_main OMIT/,/end_main OMIT/ HLexecuteTmpl
+
+* Agenda
+
+- Code generator definition and examples
+- Why they are useful
+- Our scenario
+- Manual approach
+- Generating code
+- *Running* *it*
+
+* Running it
+
+*obfuscate*, our code generation tool, is a cli program receiving a type name to obfuscate.
+
+It loads the go package in the current directory to look for the given type
+
+  usage: obfuscate typeName
+
+* Running it
+
+Go 1.4 added *generate*, a tool to help to run code generation tools
+It will look for comments in the flowing form:
+
+  //go:generate tool tool_arguments
+
+Where
+- *tool* is any binary
+- *tool_arguments* are the arguments required by `tool`
+
+`go` `generate` is not part of the building process, therefore we need to call it before `go` `build`
+
+  $ go generate
+  $ go build
+  $ go test
+  ...
+
+* Running it
+
+for our obfuscate tool:
+
+.code snippets.go /start_gogenerate OMIT/,/end_gogenerate OMIT/
+
+* Demo time!
+
+.image imgs/demo.gif _ 400
+.image imgs/figerscrossed.gif _ 100
+
+* Thanks
+
+* Questions?
