@@ -1,0 +1,1007 @@
+# Go testing: from basic to advanced
+10 December 2020
+
+Anderson Queiroz
+Tech Lead
+Blacklane
+
+@AinSoph
+
+contato@andersonq.eti.br
+
+https://www.linkedin.com/in/andersonq/
+
+https://github.com/AndersonQ/talks
+
+## whoami
+
+- Brazilian
+
+- Living in Berlin for almost 3 years
+
+- ~15 years coding (I started when I was an adolescent)
+
+- ~3 writing Go
+
+- Gopher!
+
+## Agenda
+
+- Quick recap
+- Verbose and short flags
+- Helper functions
+- Table test
+- Parallel tests
+- Race detector
+- Test data
+- Blackbox testing
+- Integration test
+- HTTP test
+- Setup and teardown
+- Test cache
+
+## Let's Go
+
+.image imgs/gopher.svg 500 _
+.caption _Gopher_ by [[https://github.com/egonelbre/gophers][Egon Elbre]]
+
+## Quick recap
+
+## What is a test in go?
+
+- any file ending in *_test.go*
+- any function like **func TestXxx(\*testing.T)**
+
+The fist character after *Test* **MUST** be a capital letter
+
+.code tips_test.go /start_TestSample OMIT/,/end_TestSample OMIT/
+
+## *testing.T?
+
+## *testing.T?
+
+In a test we interact with the type *testing.T*. It provides all functionalities
+we need, such as to mark a test as failed, skip a test and so on.
+
+```
+    func (c *T) Error(args ...interface{})
+    func (c *T) Errorf(format string, args ...interface{})
+    func (c *T) Fail()
+    func (c *T) FailNow()
+    func (c *T) Failed() bool
+    func (c *T) Fatal(args ...interface{})
+    func (c *T) Fatalf(format string, args ...interface{})
+    func (c *T) Helper()
+    func (c *T) Log(args ...interface{})
+    func (c *T) Logf(format string, args ...interface{})
+    func (c *T) Name() string
+    func (t *T) Parallel()
+    func (t *T) Run(name string, f func(t *T)) bool
+    func (c *T) Skip(args ...interface{})
+    func (c *T) SkipNow()
+    func (c *T) Skipf(format string, args ...interface{})
+    func (c *T) Skipped() bool
+```
+
+## Failing a test
+
+- flag a failure and move on:
+
+  `Fail()`
+
+- mark the whole test as failed and stop the execution:
+
+  `FailNow()`
+
+- flag a failure with a message:
+
+  `Error(args ...interface{})`
+
+  `Errorf(format string, args ...interface{})`
+
+- fail the whole test and stop the test:
+
+  `Fatal(args ...interface{})`
+
+  `Fatalf(format string, args ...interface{})`
+
+## A simple example
+.code tips_test.go /start_TestSimple OMIT/,/end_TestSimple OMIT/
+.code tips_test.go /start_TestSimpleFatal OMIT/,/end_TestSimpleFatal OMIT/
+
+## Running tests
+
+## Running tests
+
+- all tests in a package
+
+  `go test [Package path]`
+
+- all tests in current folder and sub folders:
+
+  `go test ./...`
+
+- select test by name/regex
+```
+  go test -run Foo     # Run top-level tests matching "Foo", such as "TestFooBar".
+  go test -run Foo/A=  # For top-level tests matching "Foo", run subtests matching "A=".
+  go test -run /A=1    # For all top-level tests, run subtests matching "A=1".
+```
+
+## Verbose and short flags
+
+## Agenda
+
+- Quick recap
+- **Verbose and short flags**
+- Helper functions
+- Table test
+- Parallel tests
+- Race detector
+- Test data
+- Blackbox testing
+- Integration test
+- HTTP test
+- Setup and teardown
+- Test cache
+
+## Verbose mode
+
+  go test -v
+
+- `go test` will individually print every test,
+- print messages logged with *t.Log* and *t.Logf* methods,
+- check at runtime by calling *testing.Verbose()*.
+
+.code tips_test.go /start_TestVerbose OMIT/,/end_TestVerbose OMIT/
+
+## Verbose mode (output)
+
+- not verbose
+```
+    $ go test -run TestVerbose
+    2019/09/06 12:01:39 log.Println: always printed
+    PASS
+    ok  	github.com/AndersonQ/talks/2020.12.10.Golang.Live	0.006s
+```
+
+- verbose
+```
+    $ go test -v -run TestVerbose
+    === RUN   TestVerbose
+    2019/09/06 12:02:16 log.Println: always printed
+    --- PASS: TestVerbose (0.00s)
+        tips_test.go:39: only printed in verbose mode
+        tips_test.go:43: some verbose, but really useful info
+    PASS
+    ok  	github.com/AndersonQ/talks/2020.12.10.Golang.Live	0.007s
+```
+
+## Short mode
+
+- `go test -short`
+
+- used to skip _"slow tests"_
+- check at runtime by calling *testing.Short()*
+
+.code tips_test.go /start_TestShort OMIT/,/end_TestShort OMIT/
+
+## Short mode (output)
+- not verbose
+```
+    $ go test -run TestShort
+    PASS
+    ok  	github.com/AndersonQ/talks/2020.12.10.Golang.Live	3.014s
+```
+- verbose
+```
+    $ go test -v -short -run TestShort
+    === RUN   TestShort
+    --- PASS: TestShort (0.00s)
+    === RUN   TestShortNotSoShort
+    --- SKIP: TestShortNotSoShort (0.00s)
+        tips_test.go:56: Skip in short mode
+    PASS
+    ok  	github.com/AndersonQ/talks/2020.12.10.Golang.Live	0.005s
+```
+## Helper functions
+
+## Agenda
+
+- Quick recap
+- Verbose and short flags
+- **Helper functions**
+- Table test
+- Parallel tests
+- Race detector
+- Test data
+- Blackbox testing
+- Integration test
+- HTTP test
+- Setup and teardown
+- Test cache
+
+## Helper functions
+
+Sometimes we need to do something repetitive, setup, tear down or else.
+In order to not clog the test, a helper function is used:
+
+.code tips_test.go /start_helperFunction OMIT/,/end_helperFunction OMIT/
+
+Passing **_t_** is a common practice. It allow to abort the test if a failure
+happens.
+
+## Helper functions
+
+    $ go test -run TestWithHelper                                                                                                                                                                                                                                      ‹ruby-2.4.1›
+    --- FAIL: TestWithHelper (0.00s)
+        tips_test.go:97: helperFunction setup failed
+    FAIL
+    exit status 1
+    FAIL	github.com/AndersonQ/talks/2020.12.10.Golang.Live	0.005s
+
+However, the output shows the failure was on
+
+.code tips_test.go /start_helperFunction_line OMIT/,/end_helperFunction_line OMIT/
+
+Not so helpful.
+
+## t.Helper() for the rescue
+
+## t.Helper()
+
+We can invoke *t.Helper()* to signal it's a helper function and the error should be reported on the caller.
+
+.code tips_test.go /start_betterHelperFunction OMIT/,/end_betterHelperFunction OMIT/
+
+    $ go test -run TestWithBetterHelper                                                                                                                                                                                                                                ‹ruby-2.4.1›
+    --- FAIL: TestWithBetterHelper (0.00s)
+        tips_test.go:106: betterHelperFunction setup failed
+    FAIL
+    exit status 1
+    FAIL	github.com/AndersonQ/talks/2020.12.10.Golang.Live	0.005s
+
+## Table test
+
+## Agenda
+
+- Verbose and short flags
+- Helper functions
+- **Table test**
+- Parallel tests
+- Race detector
+- Test data
+- Blackbox testing
+- Integration test
+- HTTP test
+- Setup and teardown
+- Test cache
+
+## Table test
+
+When we have similar test setup, only some values changing from one test to another,
+we can use a table test.
+
+A table test consists of a test, a set of test cases and a loop making the test
+for each test case.
+
+Let's write a wee table test for `math.Abs`.
+
+## Table test: test cases
+
+.code tips_test.go /start_TestTable_tcs OMIT/,/end_TestTable_tcs OMIT/ HLtcs
+
+## Table test: for loop
+
+.code tips_test.go /start_TestTable_for OMIT/,/end_TestTable_for OMIT/ HLrun
+
+## Table test: all together
+
+.code tips_test.go /start_TestTable OMIT/,/end_TestTable OMIT/
+
+## Table test (output)
+
+- not verbose:
+```
+    $ go test -run TestTableSimple
+    PASS
+    ok  	github.com/AndersonQ/talks/2020.12.10.Golang.Live	0.004s
+```
+
+- verbose:
+```
+    $ go test -v -run TestTableSimple
+    === RUN   TestTableSimple
+    === RUN   TestTableSimple/the_positive
+    === RUN   TestTableSimple/the_negative
+    === RUN   TestTableSimple/zero
+    --- PASS: TestTableSimple (0.00s)
+        --- PASS: TestTableSimple/the_positive (0.00s)
+        --- PASS: TestTableSimple/the_negative (0.00s)
+        --- PASS: TestTableSimple/zero (0.00s)
+    PASS
+    ok  	github.com/AndersonQ/talks/2020.12.10.Golang.Live	0.004s
+```
+
+## Slow table test?
+
+.code tips_test.go /start_TestTableSlow OMIT/,/end_TestTableSlow OMIT/
+
+## Slow table test? (output)
+
+```
+    $ go test -v -run TestTableSlow
+    === RUN   TestTableSlow
+    === RUN   TestTableSlow/1s
+    === RUN   TestTableSlow/2s
+    === RUN   TestTableSlow/3s
+    --- PASS: TestTableSlow (6.01s)
+        --- PASS: TestTableSlow/1s (1.00s)
+        --- PASS: TestTableSlow/2s (2.00s)
+        --- PASS: TestTableSlow/3s (3.00s)
+    PASS
+    ok  	github.com/AndersonQ/talks/2020.12.10.Golang.Live	6.012s
+```
+
+We can do better!
+
+## t.Parallel() for the rescue
+
+## Agenda
+
+- Verbose and short flags
+- Helper functions
+- Table test
+- **Parallel tests**
+- Race detector
+- Test data
+- Blackbox testing
+- Integration test
+- HTTP test
+- Setup and teardown
+- Test cache
+
+## t.Parallel()
+
+All tests calling **_t.Parallel()_** will run in parallel within the same package.
+
+.code tips_test.go /start_TestTableParallel OMIT/,/end_TestTableParallel OMIT/
+
+## t.Parallel()
+
+    $ go test -v -run TestTableParallel$
+    === RUN   TestTableParallel
+    === RUN   TestTableParallel/1s
+    === PAUSE TestTableParallel/1s
+    === RUN   TestTableParallel/2s
+    === PAUSE TestTableParallel/2s
+    === RUN   TestTableParallel/3s
+    === PAUSE TestTableParallel/3s
+    === CONT  TestTableParallel/1s
+    === CONT  TestTableParallel/3s
+    === CONT  TestTableParallel/2s
+    --- PASS: TestTableParallel (0.00s)
+        --- PASS: TestTableParallel/2s (3.00s)
+            tips_test.go:174: running  3s
+        --- PASS: TestTableParallel/1s (3.00s)
+            tips_test.go:174: running  3s
+        --- PASS: TestTableParallel/3s (3.00s)
+            tips_test.go:174: running  3s
+    PASS
+    ok  	github.com/AndersonQ/talks/2020.12.10.Golang.Live	3.008s
+something looks wrong...
+why is it only printing "**_tips_test.go:174: running 3s_**" ?
+
+## t.Parallel()
+
+The goroutines are sharing the variable **_tc_**!
+
+.code tips_test.go /start_for_TestTableParallel OMIT/,/end_for_TestTableParallel OMIT/ HLsharing
+
+## t.Parallel()
+Each goroutine has to have its own **_tc_**.
+
+.code tips_test.go /start_for_TestTableParallelFixed OMIT/,/end_for_TestTableParallelFixed OMIT/
+
+## t.Parallel()
+Fixed!
+
+.code tips_test.go /start_TestTableParallelFixed OMIT/,/end_TestTableParallelFixed OMIT/
+
+## t.Parallel()
+
+**Watch* *out!**
+
+If you write something like:
+
+`tc := tc`
+
+put a comment explaining why!
+
+We don't want a well intentioned engineer removing this _"useless"_ line.
+
+## t.Parallel() (output)
+
+    $ go test -v -run TestTableParallelFixed
+    === RUN   TestTableParallelFixed
+    === RUN   TestTableParallelFixed/1s
+    === PAUSE TestTableParallelFixed/1s
+    === RUN   TestTableParallelFixed/2s
+    === PAUSE TestTableParallelFixed/2s
+    === RUN   TestTableParallelFixed/3s
+    === PAUSE TestTableParallelFixed/3s
+    === CONT  TestTableParallelFixed/1s
+    === CONT  TestTableParallelFixed/3s
+    === CONT  TestTableParallelFixed/2s
+    --- PASS: TestTableParallelFixed (0.00s)
+        --- PASS: TestTableParallelFixed/1s (1.00s)
+            tips_test.go:202: running  1s
+        --- PASS: TestTableParallelFixed/2s (2.00s)
+            tips_test.go:202: running  2s
+        --- PASS: TestTableParallelFixed/3s (3.00s)
+            tips_test.go:202: running  3s
+    PASS
+    ok  	github.com/AndersonQ/talks/2020.12.10.Golang.Live	3.008s
+
+## t.Parallel()
+
+You can control how many tests are run in parallel using the flag **_-p_**:
+
+  `go test -p=3 ./...`
+
+or to force them to run sequentially.
+
+  `go test -p=1 ./...`
+
+## What else?
+
+## Race detector!
+
+## Agenda
+
+- Verbose and short flags
+- Helper functions
+- Table test
+- Parallel tests
+- **Race detector**
+- Test data
+- Blackbox testing
+- Integration test
+- HTTP test
+- Setup and teardown
+- Test cache
+
+## Race detector
+
+As we're in the parallelism topic, since the version 1.1 Go has a built in race detector.
+Just pass **_-race_**  and it'll kick in.
+
+```
+    $ go test -race mypkg    // test the package
+    $ go run -race mysrc.go  // compile and run the program
+    $ go build -race mycmd   // build the command
+    $ go install -race mypkg // install the package
+```
+
+(from https://blog.golang.org/race-detector)
+
+## Race detector
+```
+    $ go test -run TestRace
+    950.594304ms
+    1.036182019s
+    1.704839419s
+    1.944835828s
+    2.232832234s
+    2.78703401s
+    3.424386815s
+    3.758950018s
+    3.944828741s
+    4.427233451s
+    PASS
+    ok  	github.com/AndersonQ/talks/2020.12.10.Golang.Live	5.009s
+```
+
+## Race detector in action
+
+```
+    $ go test -race -run TestRace
+    ==================
+    WARNING: DATA RACE
+    Read at 0x00c000010038 by goroutine 9:
+      github.com/AndersonQ/talks/2020.12.10.Golang.Live.race.func1()
+          /Users/aqueiroz/devel/github.com/AndersonQ/talks/2020.12.10.Golang.Live/race.go:14 +0x121
+
+    Previous write at 0x00c000010038 by goroutine 8:
+      github.com/AndersonQ/talks/2020.12.10.Golang.Live.race()
+          /Users/aqueiroz/devel/github.com/AndersonQ/talks/2020.12.10.Golang.Live/race.go:12 +0x18d
+      github.com/AndersonQ/talks/2020.12.10.Golang.Live.TestRace()
+          /Users/aqueiroz/devel/github.com/AndersonQ/talks/2020.12.10.Golang.Live/race_test.go:6 +0x2f
+      testing.tRunner()
+          /usr/local/go/src/testing/testing.go:909 +0x199
+```
+
+## Race detector in action (cont.)
+
+```
+    Goroutine 9 (running) created at:
+      time.goFunc()
+          /usr/local/go/src/time/sleep.go:168 +0x51
+
+    Goroutine 8 (running) created at:
+      testing.(*T).Run()
+          /usr/local/go/src/testing/testing.go:960 +0x651
+      testing.runTests.func1()
+          /usr/local/go/src/testing/testing.go:1202 +0xa6
+      testing.tRunner()
+          /usr/local/go/src/testing/testing.go:909 +0x199
+      testing.runTests()
+          /usr/local/go/src/testing/testing.go:1200 +0x521
+      testing.(*M).Run()
+          /usr/local/go/src/testing/testing.go:1117 +0x2ff
+      github.com/AndersonQ/talks/2020.12.10.Golang.Live.TestMain()
+          /Users/aqueiroz/devel/github.com/AndersonQ/talks/2020.12.10.Golang.Live/tips_test.go:24 +0x62
+      main.main()
+          _testmain.go:66 +0x223
+    ==================
+```
+
+## Race detector in action (cont.)
+
+```
+    --- FAIL: TestRace (5.00s)
+        testing.go:853: race detected during execution of test
+    FAIL
+    exit status 1
+    FAIL	github.com/AndersonQ/talks/2020.12.10.Golang.Live	5.015s
+```
+
+## Test Data
+
+## Agenda
+
+- Verbose and short flags
+- Helper functions
+- Table test
+- Parallel tests
+- Race detector
+- **Test data**
+- Blackbox testing
+- Integration test
+- HTTP test
+- Setup and teardown
+- Test cache
+
+## testdata
+
+**_testdata_** is a special directory reserved for, well, test data:
+
+> The go tool will ignore a directory named "testdata", making it available
+> to hold ancillary data needed by the tests. _(go help test)_
+
+Also when running tests, the root directory is set to the package root.
+
+    $ ll
+    drwxr-xr-x  3 aqueiroz  aqueiroz    96B  6 Sep 14:40 testdata
+    -rw-r--r--  1 aqueiroz  aqueiroz   4.3K 29 Oct 11:16 tips_test.go
+
+## testdata
+
+To access any _testdata_ is as easy as:
+
+.code tips_test.go /start_TestTestdata OMIT/,/end_TestTestdata OMIT/
+
+## Black box testing
+
+## Agenda
+
+- Verbose and short flags
+- Helper functions
+- Table test
+- Parallel tests
+- Race detector
+- Test data
+- **Blackbox testing**
+- Integration test
+- HTTP test
+- Setup and teardown
+- Test cache
+
+## "_test" package
+
+> "Test files that declare a package with the suffix "_test" will be compiled as a separate package,
+> and then linked and run with the main test binary." _(go help test)_
+
+- **_mypackage_test_** can live in the same folder as **_mypackage_**
+- it'll only have access to exported things
+- `go_test` runs the tests within _mypackage__test_ as well as the other tests
+
+.code pwd/pwd_black_box_test.go /start_TestPackage_test OMIT/,/end_TestPackage_test OMIT/
+
+## "_test" package (output)
+
+- not verbose
+```
+    $ go test -v -run TestPackage_test ./pwd
+    2019/11/01 10:10:46 pwd.PWD: /Users/aqueiroz/devel/github.com/AndersonQ/talks/2020.12.10.Golang.Live/pwd
+    PASS
+    ok  	github.com/AndersonQ/talks/2020.12.10.Golang.Live/pwd	0.007s
+```
+- verbose
+```
+    $ go test -v -run TestPackage_test ./pwd
+    === RUN   TestPackage_test
+    2019/11/01 10:10:58 pwd.PWD: /Users/aqueiroz/devel/github.com/AndersonQ/talks/2020.12.10.Golang.Live/pwd
+    --- PASS: TestPackage_test (0.00s)
+    PASS
+    ok  	github.com/AndersonQ/talks/2020.12.10.Golang.Live/pwd	0.007s
+```
+
+## Integration test
+
+## Agenda
+
+- Verbose and short flags
+- Helper functions
+- Table test
+- Parallel tests
+- Race detector
+- Test data
+- Blackbox testing
+- **Integration test**
+- HTTP test
+- Setup and teardown
+- Test cache
+
+## Integration test
+
+.image imgs/unit_test_tweet.png
+
+## Integration test
+
+If it needs anything else rather than:
+
+`go mod download`
+
+it's not a unit test.
+
+## Integration test
+
+Integration tests or any other tests with external dependencies should be separated from unit tests.
+
+We can use the *-short* flag and don't run them when it's set.
+However it's intended to separate the _slow tests_ from the others.
+
+We can use build flags instead.
+
+Also naming the test files **__integration_test.go_** will help.
+
+## Integration test
+
+.code tips_integration_test.go /start_TestIntegrationTest OMIT/,/end_TestIntegrationTest OMIT/
+```
+    $ go test -v -run TestIntegrationTest
+    testing: warning: no tests to run
+    PASS
+    ok  	github.com/AndersonQ/talks/2020.12.10.Golang.Live	0.005s
+```
+
+Looks like no test was run:
+
+> testing: warning: no tests to run!
+
+## Integration test
+
+We need to pass your build tag **_integration_**:
+
+```
+    $ go test -v -tags integration -run TestIntegrationTest
+    === RUN   TestIntegrationTest
+    --- PASS: TestIntegrationTest (0.00s)
+        tips_integration_test.go:11: A integration test
+    PASS
+    ok  	github.com/AndersonQ/talks/2020.12.10.Golang.Live	0.005s
+```
+
+## HTTP test
+
+## Agenda
+
+- Verbose and short flags
+- Helper functions
+- Table test
+- Parallel tests
+- Race detector
+- Test data
+- Blackbox testing
+- Integration test
+- **HTTP test**
+- Setup and teardown
+- Test cache
+
+## HTTP test
+
+Using Go's `httptest` package to test HTTP handlers as well as
+components making external HTTP calls is quite easy.
+
+This package provides a test server, which can support TLS, a response recorder
+and incoming server request.
+
+## Testing HTTP handlers
+
+Let's make a test to ensure our handler response is a JSON conteining the path
+we called.
+
+.code httptest/httptest_test.go  /start_Test_handler OMIT/,/end_Test_handler OMIT/
+
+## Testing HTTP handlers
+
+First we create a incoming server request and a response recorder.
+
+.code httptest/httptest_test.go  /start_Test_handler OMIT/,/end_Test_handler OMIT/ HLrecorder
+
+## Testing HTTP handlers
+
+Then we invoke our handler and check if the response is what we want.
+
+.code httptest/httptest_test.go  /start_Test_handler OMIT/,/end_Test_handler OMIT/ HLresponse
+
+## Testing external HTTP calls
+
+To test a component making an external call we need some mock server, which is
+pretty straight forward to build in Go.
+
+Let's say we have a `Fetcher` receiving an ID and it should call the external
+server with a `GET` request to `SERVER_ADDRESS/ID`.
+
+Here is the core of our fetcher:
+
+.code httptest/httptest.go /start_fetcher OMIT/,/end_fetcher OMIT/
+
+## Testing external HTTP calls
+
+The whole fetcher:
+
+.code httptest/httptest.go /start_NewFetcher OMIT/,/end_NewFetcher OMIT/
+
+## Testing external HTTP calls
+
+To build out test server we just need to implement a `http.Handler` and pass it
+to `httptest.NewServer`
+
+.code httptest/httptest_test.go /start_testServer OMIT/,/end_testServer OMIT/ HLserver
+
+**_ts_** is our test server, check the docs to see all it can do. For this simple
+test we just want to close the server once the test is over.
+
+## Testing external HTTP calls
+
+The address of the server our fetcher calls is injected, so we can easily test
+it, we just need to pass in the URL of out test server:
+
+.code httptest/httptest_test.go /start_NewFetcher OMIT/,/end_NewFetcher OMIT/ HLNewFetcher
+
+## Testing external HTTP calls
+
+We can make assertions in the handler we build or just use it reply with
+whatever response we want to use to test our component.
+
+.code httptest/httptest_test.go /start_testServer OMIT/,/end_testServer OMIT/ HLassertions
+
+**_ts_** is our test server, check the docs to see all it can do. For this simple
+test we just want to close the server once the test is over.
+
+## Testing external HTTP calls
+
+.code httptest/httptest_test.go /start_TestNewFetcher OMIT/,/end_TestNewFetcher OMIT/
+
+## Examples
+
+## Agenda
+
+- Verbose and short flags
+- Helper functions
+- Table test
+- Parallel tests
+- Race detector
+- Test data
+- Blackbox testing
+- Integration test
+- HTTP test
+- **Examples**
+- Setup and teardown
+- Test cache
+
+## Examples
+
+Besides testes in Go we also have the concept of _Examples_. As the name suggests, these are functions
+aimed to demonstrate how to use another function or method. **_go test_** will also run them.
+
+An Example is a function named as _ExampleXYZ_ placed inside a __test.go_ file.
+They also may contain "assertions" to the standard output.
+
+## An Example example
+
+.code example_test.go /start_ExampleHello OMIT/,/end_ExampleHello OMIT/
+
+Output:
+```
+$ go test -v -run ExampleHello$
+=== RUN   ExampleHello
+--- PASS: ExampleHello (0.00s)
+PASS
+ok  	github.com/AndersonQ/talks/2020.12.10.Golang.Live	0.011s
+```
+
+## A broken example
+
+.code example_test.go /start_ExampleHello_broken OMIT/,/end_ExampleHello_broken OMIT/
+
+Output:
+```
+$ go test -v -run ExampleHello_broken
+=== RUN   ExampleHello_broken
+--- FAIL: ExampleHello_broken (0.00s)
+got:
+Hello, Jake
+want:
+Hello,  Jake
+FAIL
+exit status 1
+FAIL	github.com/AndersonQ/talks/2020.12.10.Golang.Live	0.011s
+```
+
+## Unordered example
+
+.code example_test.go /start_ExampleUnordered OMIT/,/end_ExampleUnordered OMIT/
+
+```
+$ go test -v -run ExampleUn
+=== RUN   ExampleUnordered
+--- PASS: ExampleUnordered (0.00s)
+PASS
+ok  	github.com/AndersonQ/talks/2020.12.10.Golang.Live	0.012s
+```
+
+## Naming convention for Examples
+
+Given a function _MyFunc_, a type _MyType_, and a method _MyMethod_ on type _MyType_:
+
+.code example.go /start_naming OMIT/,/end_naming OMIT/
+
+the convention is:
+
+```
+func Example()                { ... }
+func ExampleMyFunc()          { ... }
+func ExampleMyType()          { ... }
+func ExampleMyType_MyMethod() { ... }
+```
+
+or for multiple examples for the same function/type/method a suffix can be added:
+```
+func Example_suffix()                { ... }
+func ExampleMyFunc_suffix()          { ... }
+func ExampleMyType_suffix()          { ... }
+func ExampleMyType_MyMethod_suffix() { ... }
+```
+
+## Naming convention for Examples
+
+.code example_test.go /start_namingexample OMIT/,/end_namingexample OMIT/
+
+## Set up and Teardown
+
+## Agenda
+
+- Verbose and short flags
+- Helper functions
+- Table test
+- Parallel tests
+- Race detector
+- Test data
+- Blackbox testing
+- Integration test
+- HTTP test
+- **Setup and teardown**
+- Test cache
+
+## func TestMain(m *testing.M)
+
+We can have a _"main"_ function for our tests.
+
+In the same way the `main` function
+is the entrypoint of a Go program, the `TestMain` is the entrypoint for
+the tests in a package.
+
+.code tips_test.go /start_TestMain OMIT/,/end_TestMain OMIT/
+
+Watch out `MainTest` receives a **`*testing.M`** instead of `*testing.T`.
+
+## flags for TestMain
+
+> "If TestMain depends on command-line flags, including those of the testing package,
+> it should call flag.Parse explicitly" _(https://godoc.org/testing)_
+
+.code setupteardown/set_up_tear_down_test.go /start_TestMain OMIT/,/end_TestMain OMIT/
+
+## flags for TestMain
+
+```
+    $ go test -v ./setupteardown
+    TestMain
+    Package level SetUp
+    === RUN   TestSetUpTearDown1
+    --- PASS: TestSetUpTearDown1 (0.00s)
+        set_up_tear_down_test.go:18: SetUp/TearDown test 1
+    === RUN   TestSetUpTearDown2
+    --- PASS: TestSetUpTearDown2 (0.00s)
+        set_up_tear_down_test.go:22: SetUp/TearDown test 2
+        set_up_tear_down_test.go:23: SetUp/TearDown test 2
+    PASS
+    Package level TearDown
+    ok  	github.com/AndersonQ/talks/2020.12.10.Golang.Live/setupteardown	0.005s
+```
+
+## flags for TestMain broken
+
+.code setupteardownbroken/set_up_tear_down_test.go /start_TestMain OMIT/,/end_TestMain OMIT/
+
+```
+    $ go test ./setupteardownbroken
+    panic: testing: Verbose called before Parse
+
+    goroutine 1 [running]:
+    testing.Verbose(...)
+        /usr/local/go/src/testing/testing.go:392
+    github.com/AndersonQ/talks/2020.12.10.Golang.Live/setupteardownbroken.TestMain(0xc0000b0000)
+        /Users/aqueiroz/devel/github.com/AndersonQ/talks/2020.12.10.Golang.Live/setupteardownbroken/set_up_tear_down_test.go:14 +0xe3
+    main.main()
+        _testmain.go:40 +0x135
+    FAIL	github.com/AndersonQ/talks/2020.12.10.Golang.Live/setupteardownbroken	0.007s
+    FAIL
+```
+
+## Test cache
+
+## Agenda
+
+- Verbose and short flags
+- Helper functions
+- Table test
+- Parallel tests
+- Race detector
+- Test data
+- Blackbox testing
+- Integration test
+- HTTP test
+- Setup and teardown
+- **Test cache**
+
+## Cached tests
+
+Go will cache tests whenever possible:
+
+> "[...] go test caches successful package test results to avoid unnecessary
+> repeated running of tests. When the result of a test can be recovered from the
+> cache, go test will redisplay the previous output instead of running the test
+> binary again. When this happens, go test prints '(cached)' in place of the elapsed
+> time in the summary line." _(go help test)_
+
+## Cached tests
+
+> "The idiomatic way to disable test caching explicitly is to use -count=1"
+> _(go help test)_
+
+```
+    $ go test ./pwd
+    ok  	github.com/AndersonQ/talks/2020.12.10.Golang.Live/pwd	0.012s
+
+    $ go test ./pwd
+    ok  	github.com/AndersonQ/talks/2020.12.10.Golang.Live/pwd	(cached)
+
+    $ go test -count=1 ./pwd
+    ok  	github.com/AndersonQ/talks/2020.12.10.Golang.Live/pwd	0.012s
+```
+
+## Questions?
