@@ -1,0 +1,227 @@
+# From The Monolith to An Event Driven Architecture
+14 April 2021
+
+Anderson Queiroz
+Tech Lead
+Blacklane
+
+@AinSoph
+
+contato@andersonq.eti.br
+
+https://www.linkedin.com/in/andersonq/
+
+https://github.com/AndersonQ/talks
+
+## whoami
+
+- Brazilian
+
+- Living in Berlin since 2018
+
+- ~15 years coding (I started when I was an adolescent)
+
+- 3+ writing Go
+
+- Gopher!
+
+## Agenda
+
+- A bit of context: before the pandemic
+- The pandemic hit
+- New product, new architecture: on-demand rides
+- Challenges and learnings
+- Some Go code
+- Questions
+
+## Let's Go
+
+.image imgs/gopher_BL_car.svg 500 _
+.caption inspired by [[http://reneefrench.blogspot.com/][Renee French]]
+
+## A bit of context: before the pandemic
+
+- Global Chauffeur service
+- Pre booked (at least 24h in advance)
+- The majority of our rides were airport pickups
+
+
+- Long term vision includes integrating more services
+
+## Elli, the monolith
+
+- A Ruby on Rails monolith
+- made around the concept of "ride"
+- cannot add other products without a big refactor
+
+## Let's break the monolith: Tahiti project
+
+Mission: “Create an event sourcing based design that connects our frontend services with our core domain services.”
+
+We set out a team to experiment with a new and flexible architecture which would allow to "plug and play" new services
+
+## The pandemic hit
+
+- Travel industry almost on a complete halt
+- Bookings went down to almost zero
+- The roadmap and priorities didn't make sense anymore
+
+## New product, new architecture: on-demand rides
+
+- Domain-Driven Design (DDD)
+- Event driven architecture
+- CQRS
+- Vertical slice
+- Based on the learnings from the Tahiti project
+
+## Principles of the new architecture
+
+- It's green field project
+- Communication between bounded contexts is trough events
+- Kafka as event bus
+- Asynchronous communication as much as possible
+
+## What is a DomainEvent?
+
+> An event is something that has happened in the past.
+> All events should be represented as verbs in the past tense such as CustomerRelocated, CargoShipped, or InventoryLossageRecorded.
+> For those who speak French, it should be in Passé Composé, they are things that have completed in the past.
+
+.caption [[https://cqrs.files.wordpress.com/2010/11/cqrs_documents.pdf][CQRS Documents by Greg Young]]
+
+## Challenges and learnings
+
+## The smell
+
+>_Service A_: emits an event "FooThing**Requested**"
+
+>_Service B_: listens to "FooThing**Requested**", process it and emits "FooThing**Response**"
+
+>_Service A_: listens to "FooThing**Response**"
+
+it smells like... ahn... HTTP over Kafka?
+
+_"Communicate asynchronously through Kafka"_
+
+either this felt as a hard rule,
+or everyone was so exited with this idea that synchronous HTTP requests looked like a sin.
+
+## The outcome
+
+- Not everything that _can_ be asynchronous, _needs_ to be asynchronous
+- If an immediate feedback is needed, probably a sync HTTP approach will do better
+
+## The smell
+
+>_Kafka topic_: `rides`
+
+>_Rides service_: emits _RideCreated_
+
+>_Ride Matcher service_: listens to _RideCreated_, find a chauffeur and emits _RideChauffeurAssigned_
+
+>_Rides service_: updates the ride
+
+##
+
+two services publishing events that belong to the same entity...
+
+it's just like two services updating the same row in a relational database
+
+## The outcome
+
+Two domains:
+ - ride
+ - ride fulfillment
+
+A ride is, basically, pickup, dropoff, guest and chauffeur.
+
+Ride fulfillment is all needed to find a chauffeur to go from pickup to dropoff.
+
+Ride is clearly an entity, and an entity is own by one, and only one, service. Therefore a as a rule
+of thumb: "one publisher, multiple consumers".
+
+## The outcome
+
+>_Kafka topics_: rides, rides-fulfillment
+
+>_Rides service_: emits _RideCreated_ on the _rides_ topic
+
+>_Ride Matcher service_: listens to _RideCreated_, find a chauffeur and emits _ChauffeurFound_ on the rides-fulfillment topic
+
+>_Rides service_: listens to _ChauffeurFound_ on the rides-fulfillment topic, assigns the chauffeur to the ride and then
+publishes _RideAccepted_
+
+## Where is the data?
+
+## Everywhere, it's distributed!
+
+We're building a search service:
+
+- Elastic search
+- listens to different domain events
+- avoid storing "whole entities"
+- indexes information (or fields) needed to correlate entities
+- the 'domain services' are the source of truth
+
+## Plug and play features
+
+"We need to send and email to the chauffeur after each ride is completed"
+
+- new service
+- listen to ride events
+- fetch chauffeur and booking data
+- send the email
+
+no change on rides or booking service required!
+
+## Some Go code
+
+## Listening to events
+
+.image imgs/raw.png 500 _
+
+it's ... too raw
+
+## HTTP-like abstraction
+
+We're all quite familiar with HTTP concepts like
+
+- request
+- response
+- handler
+- middleware
+
+and the HTTP server takes care of processing the request concurrently
+
+let's use them!
+
+## The basis
+
+.code snippets.go /start_event_type OMIT/,/end_event_type OMIT/
+
+## The helpers
+
+.code snippets.go /start_event_helpers OMIT/,/end_event_helpers OMIT/
+
+## The loop
+
+.code snippets.go /start_run_loop OMIT/,/end_run_loop OMIT/
+
+## It works
+
+- a rather simple implementation
+- we can collect the same metrics we do for HTTP services
+- middleware allows to easily integrate APM, tracing and so on
+- it's library, easy to roll out changes across teams and services
+
+
+## some catches
+
+- the `Event` type is too generic, it can be tailored to our needs
+- even though the messages are delivered in order, the Go scheduler might process them out of order
+- some services need to process the messages in the order they arrive
+- it's quite hard to abstract 100% that it uses Kafka behind the scenes
+
+## Questions?
+
+.image imgs/BL_final.png 500 _
