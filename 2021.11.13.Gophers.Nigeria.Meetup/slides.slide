@@ -1,0 +1,315 @@
+# Monitoring applications with OpenTelemetry
+13 November 2021
+
+Anderson Queiroz
+Tech Lead
+Blacklane
+
+@AinSoph
+
+contato@andersonq.eti.br
+
+https://www.linkedin.com/in/andersonq/
+
+https://github.com/AndersonQ/talks
+
+## whoami
+
+- Brazilian
+
+- Living in Berlin since 2018
+
+- ~15 years coding (I started when I was an adolescent)
+
+- 3+ writing Go
+
+- Gopher!
+
+## Agenda
+
+TODO
+
+## Let's Go
+
+.image imgs/gopher_BL_car.svg 500 _
+.caption inspired by [[http://reneefrench.blogspot.com/][Renee French]]
+
+## Monitoring & Observability
+
+- Monitoring
+
+> _"[...] watch and understand the state of their systems. Monitoring is based on gathering predefined sets of metrics or logs."_
+
+
+- Observability
+
+> _"[...] actively debug their system. Observability is based on exploring properties and patterns not defined in advance."_
+
+.caption [[https://cloud.google.com/architecture/devops/devops-measurement-monitoring-and-observability][Source]]
+
+## Monitoring & Observability
+
+ - More services, more moving parts
+   - Logs alone aren't enough to easily "see" a flow across services
+
+ - Understand application's performance
+   - Bottlenecks and "expensive" operations
+
+ - Easily investigate errors
+   - With or without knowledge about the flows and applications involved
+
+## Some definitions
+
+- Telemetry
+
+> _"[...] is the in situ collection of measurements or other data at remote points and their automatic transmission to receiving equipment (telecommunication) for monitoring"_
+> [Wikipedia](https://en.wikipedia.org/wiki/Telemetry)
+
+- APM
+
+> _"Application Performance Management (APM) is the monitoring and management of performance and availability of software applications."_
+> [Wikipedia](https://en.wikipedia.org/wiki/Application_performance_management)
+
+## OpenTelemetry
+
+> **_"High-quality, ubiquitous, and portable telemetry to enable effective observability"_**
+
+> _"OpenTelemetry is a collection of tools, APIs, and SDKs to instrument, generate, collect, and export telemetry data for analysis in order to understand your software's performance and behavior."_
+
+
+> [OpenTelemery.io](https://opentelemetry.io/)
+
+## Tracing concepts in a nutshell
+
+- Span
+> _Represents a single unit of work in a system. Typically encapsulates: operation name, a start and finish timestamp, the parent span identifier, the span identifier, and context items._
+
+- Trace
+
+> _Defined implicitly by its spans. A trace can be thought of as a directed acyclic graph of spans where the edges between spans are defined as parent/child relationships._
+
+- Distributed Context
+
+> _Contains the tracing identifiers, tags, and options that are propagated from parent to child spans._
+
+.caption [[https://docs.google.com/presentation/d/1nVhLIyqn_SiDo78jFHxnMdxYlnT0b7tYOHz3Pu4gzVQ/edit#slide=id.g61d2fe2fc1_0_0][Source]]
+
+## Tracing: A Mental Model
+
+.image imgs/trace-trace.png _ 1000
+
+.caption [[https://opencensus.io/img/trace-trace.png][Source]]
+
+## Distributed Tracing: A Mental Model
+
+.image imgs/trace-distributed.png _ 1000
+
+.caption [[https://opentracing.io/img/overview-intro/tracing1_0.png][Source]]
+
+## A real(ish) example
+
+.image imgs/trace-real.png _ 1000
+
+## OpenTelemetry (OTel) architecture
+
+.image imgs/Reference_Architecture.svg 500 _
+
+.caption [[https://raw.github.com/open-telemetry/opentelemetry.io/main/iconography/Reference_Architecture.svg][source]]
+
+## How to instrument and application with OTel
+
+- Create a Span
+
+.code code.go /start_create_span1 OMIT/,/end_create_span1 OMIT/
+
+A new span is created and added to the context. If there is already a span in the
+context, the new span will be a child span, otherwise it's a root span.
+
+
+**All spans must be ended**. Not doing so might lead memory or other resources leak.
+
+- Get the span
+
+.code code.go /start-span-from-ctx OMIT/,/end-span-from-ctx OMIT/
+
+If there is no span in the context, a noop span is returned.
+
+## How to instrument and application with OTel
+
+Attributes: attach key/value pairs to a span
+
+- At span creation:
+
+.code code.go /start-span-attribute OMIT/,/end-span-attribute OMIT/
+
+- or later:
+
+.code code.go /start-attribute-1 OMIT/,/end-attribute-1 OMIT/
+
+## How to instrument and application with OTel
+
+Prefer to add attributes to a span when creating it (when calling `tracer.Start`)
+as the sampler* will only have access to the attributes set at span creation.
+
+
+\* more on sampler later
+
+## Sending spans across applications
+
+As we saw, spans hold a parent/child relationship, these spans together form a trace.
+We want to have a distributed trace, a trace with spans belonging to several applications.
+
+Spans are propagated by a `propagator`, it's the component responsible for extracting
+and injecting "context data" on the data exchanged by applications.
+
+Usually the _data exchanged by applications_ is a HTTP request/response or an event/message.
+
+We'll interact with 2 interfaces:
+
+- `propagation.TextMapPropagator`: Injects and Extracts data from a carrier
+
+- `propagation.TextMapCarrier`: is the "storage" used by the propagator
+
+## Sending spans across applications
+
+- HTTP requests
+
+OTel provides `propagation.HeaderCarrier` which adapts `http.Header` to implement
+the `propagation.TextMapCarrier` interface.
+
+.code code.go /start-propagate-http OMIT/,/end-propagate-http OMIT/
+
+- Messages, events and others:
+
+You'll need to implement your own `propagation.TextMapCarrier`.
+
+At Blacklane we use Kafka. As Kafka events (or messages) have a
+header, and we have a common abstraction for Kafka which already defines a header,
+the implementation is trivial.
+
+## Sending spans across applications
+
+- Blacklane's Kafka event abstraction:
+
+.code code.go /start-event OMIT/,/end-event OMIT/
+
+## Sending spans across applications
+
+- `events.Header` implements `propagation.TextMapCarrier`:
+
+.code code.go /start-event-propagation OMIT/,/end-event-propagation OMIT/
+
+## Receiving spans from other applications
+
+It's the same as sending, but the other way around. The `propagator` will
+extract the data stored on the `carrier`.
+
+- HTTP requests:
+
+The `otelhttp.NewHandler` middleware does all the work for you and more, but it's easy:
+
+.code code.go /start-receive-http OMIT/,/end-receive-http OMIT/
+
+## Receiving spans from other applications
+
+- Messages, events and others:
+
+Again, it's up to you. At Blacklane we have a `events.Handler` interface, much like
+the `http.Handler` interface:
+
+.code code.go /start-receive-events OMIT/,/end-receive-events OMIT/
+
+## Sending data to a backend
+
+Now we are producing spans and evens sending them across applications,
+we need to collect and visualise them.
+
+.image imgs/Reference_Architecture.svg 500 _
+.caption [[https://raw.github.com/open-telemetry/opentelemetry.io/main/iconography/Reference_Architecture.svg][source]]
+
+
+## Sending data to a backend
+
+It's possible to add data, attributes to every span exported by using a resource:
+
+.code code.go /start-resource OMIT/,/end-resource OMIT/
+
+Check the **`resource.With*`** functions for more options.
+
+## Sending data to a backend
+
+ - First we need a client
+
+.code code.go /start-client OMIT/,/end-client OMIT/
+
+ - then an exporter
+
+.code code.go /start-exporter OMIT/,/end-exporter OMIT/
+
+There are different exporters to different backends. Check the examples on[opentelemetry-go](https://github.com/open-telemetry/opentelemetry-go/tree/main/example)
+to see more.
+
+## Sending data to a backend
+
+To start off, experiment and debug, you can sport the spans to **`stdout`**
+
+.code code.go /start-stdoutexporter OMIT/,/end-stdoutexporter OMIT/
+
+
+## Sending data to a backend
+
+Now we can create a `TraceProvider`
+
+.code code.go /start-traceprovider OMIT/,/end-traceprovider OMIT/ HL_provider
+
+## Sending data to a backend
+
+The sampler will define which spans are exported and which ones are dropped.
+Under high loads to always sample isn't the best idea.
+
+.code code.go /start-traceprovider OMIT/,/end-traceprovider OMIT/ HL_Sampler
+
+## Sending data to a backend
+
+It's on the `TracerProvider` we add our resources
+
+.code code.go /start-traceprovider OMIT/,/end-traceprovider OMIT/ HL_resource
+
+## Sending data to a backend
+
+We export the spans synchronously or in batches. Sending them synchronously is
+ grate for testing and debugging, however don't use it in production, use the
+ batch instead.
+
+.code code.go /start-traceprovider OMIT/,/end-traceprovider OMIT/ HL_exporter
+
+.code code.go /start-traceprovider-2 OMIT/,/end-traceprovider-2 OMIT/
+
+## Sending data to a backend
+
+- Exporters can be added after the trace provider creation.
+
+.code code.go /start-debug-exporter OMIT/,/end-debug-exporter OMIT/
+
+## Sending data to a backend
+
+Now that all the pieces and bits are initialised, we need to register them.
+
+.code code.go /start-register OMIT/,/end-register OMIT/
+
+Registering them will allow your code, or libraries you're using to access the
+trace provider and propagator by getting the global trace provider or propagator.
+
+.code code.go /start-getglobals OMIT/,/end-getglobals OMIT/
+
+## Sending data to a backend
+
+By default the global trace provider and propagator are no operation implementations.
+
+Therefore it's safe to use them in the code, specially for libraries. If the
+application registers proper trace providers and propagators, the instrumented
+code will produce and export spans, if not the instrumentation will be a noop.
+
+## Let's see it all in action!
+
+## Questions?

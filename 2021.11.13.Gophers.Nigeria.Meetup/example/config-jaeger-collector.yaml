@@ -1,0 +1,15 @@
+exporters:
+  jaeger_elasticsearch:
+    es:
+      server-urls: http://elasticsearch:9200
+      num-replicas: 2
+      num-shards: 2
+#processors:
+#  attributes:
+#    actions:
+#      - key: user
+#        action: delete
+service:
+  pipelines:
+    traces:
+      processors: [attributes]
