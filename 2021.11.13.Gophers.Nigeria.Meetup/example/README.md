@@ -18,7 +18,7 @@ All the applications are instrumented and exporting the data to Jaeger, which is
 started when running the dependencies.
 
 ```shell
-make run-root-http
+make run-root
 make run-http
 make run-events
 ```
@@ -40,3 +40,17 @@ Is a Kafka consumer which consumer from the topic `otel-example` and then calls 
 
 After all applications are running, call [http://localhost:4242](http://localhost:4242) a few times.
 Check the logs, and head to [Jaeger UI](http://localhost:16686/search) to see the traces.
+
+## Clean up
+
+- To stop the containers:
+
+```shell
+make compose-down
+```
+
+- To clean up, erase the data and remove volumes:
+
+```shell
+make clean
+```

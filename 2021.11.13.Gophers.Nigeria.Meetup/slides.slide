@@ -27,7 +27,13 @@ https://github.com/AndersonQ/talks
 
 ## Agenda
 
-TODO
+ - Monitoring & Observability: definitions and concepts
+ - How to instrument and application with OTel
+ - Sending spans across applications
+ - Receiving spans from other applications
+ - Sending data to a backend
+ - Let's see it all in action!
+ - Questions
 
 ## Let's Go
 
@@ -118,6 +124,8 @@ TODO
 
 ## How to instrument and application with OTel
 
+## How to instrument and application with OTel
+
 - Create a Span
 
 .code code.go /start_create_span1 OMIT/,/end_create_span1 OMIT/
@@ -148,11 +156,21 @@ Attributes: attach key/value pairs to a span
 
 ## How to instrument and application with OTel
 
+- Events: contains a name, a timestamp and optionally attributes. Events resemble
+a structured log.
+
+.code code.go /start-spevent OMIT/,/end-spevent OMIT/
+
+
+## How to instrument and application with OTel
+
 Prefer to add attributes to a span when creating it (when calling `tracer.Start`)
 as the sampler* will only have access to the attributes set at span creation.
 
 
 \* more on sampler later
+
+## Sending spans across applications
 
 ## Sending spans across applications
 
@@ -191,13 +209,15 @@ the implementation is trivial.
 
 - Blacklane's Kafka event abstraction:
 
-.code code.go /start-event OMIT/,/end-event OMIT/
+.code code.go /start-events OMIT/,/end-events OMIT/
 
 ## Sending spans across applications
 
 - `events.Header` implements `propagation.TextMapCarrier`:
 
-.code code.go /start-event-propagation OMIT/,/end-event-propagation OMIT/
+.code code.go /start-events-propagation OMIT/,/end-events-propagation OMIT/
+
+## Receiving spans from other applications
 
 ## Receiving spans from other applications
 
@@ -218,6 +238,8 @@ Again, it's up to you. At Blacklane we have a `events.Handler` interface, much l
 the `http.Handler` interface:
 
 .code code.go /start-receive-events OMIT/,/end-receive-events OMIT/
+
+## Sending data to a backend
 
 ## Sending data to a backend
 

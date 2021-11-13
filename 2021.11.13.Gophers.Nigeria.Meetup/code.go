@@ -49,6 +49,12 @@ func main() {
 		attribute.Bool("admin", false))
 	// end-attribute-1 OMIT
 
+	// start-spevent OMIT
+	span.AddEvent("some-event", // HL
+		trace.WithStackTrace(true),
+		trace.WithAttributes(attribute.String("event-attr-key", "event-ettr-value")))
+	// end-spevent OMIT
+
 	// start-propagate-http OMIT
 	r, _ := http.NewRequest(http.MethodGet, "https://ex.com", nil)
 

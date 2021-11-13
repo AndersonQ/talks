@@ -18,7 +18,7 @@ run-http: deps
 
 .PHONY: run-events
 run-events: deps
-	go run cmd/event/main.go
+	go run cmd/events/main.go
 
 .PHONY: lint
 lint:

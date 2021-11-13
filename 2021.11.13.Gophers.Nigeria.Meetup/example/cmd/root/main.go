@@ -50,7 +50,8 @@ var count int64
 
 func newHandler(logger zerolog.Logger) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx, sp := otel.Tracer(serviceName).Start(r.Context(), "root-handler")
+		ctx, sp := otel.Tracer(serviceName).
+			Start(r.Context(), "root-handler")
 		defer sp.End()
 
 		traceID := sp.SpanContext().TraceID().String()
@@ -60,6 +61,11 @@ func newHandler(logger zerolog.Logger) func(w http.ResponseWriter, r *http.Reque
 			attribute.String("some_key", "some_value"),
 			attribute.Int64("some_int", count))
 
+		sp.AddEvent("some-event",
+			trace.WithStackTrace(true),
+			trace.WithAttributes(
+				attribute.String("event-attr-key", "event-attr-value")))
+
 		defer func() { atomic.AddInt64(&count, 1) }()
 
 		time.Sleep(time.Duration(5*rand.Intn(5)) * time.Millisecond)
@@ -68,7 +74,8 @@ func newHandler(logger zerolog.Logger) func(w http.ResponseWriter, r *http.Reque
 		req, _ := http.NewRequest(http.MethodGet, url, nil)
 
 		// Inject OTel headers to propagate the t
-		otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
+		otel.GetTextMapPropagator().
+			Inject(ctx, propagation.HeaderCarrier(req.Header))
 
 		// The headers will be sent as part of the response body to show the
 		// headers OpenTelemetry uses.
