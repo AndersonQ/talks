@@ -13,6 +13,9 @@ https://www.linkedin.com/in/andersonq/
 
 https://github.com/AndersonQ/talks
 
+https://pkg.go.dev/github.com/blacklane/go-libs/x/events@master
+
+
 ## whoami
 
 - Brazilian
@@ -27,72 +30,15 @@ https://github.com/AndersonQ/talks
 
 ## Agenda
 
+ - Concepts
+ - Some real life examples and learnings
+ - Events library - as user
+ - Events library - behind the scenes
+
 ## Let's Go
 
-TODO Gopher image
-.caption inspired by [[http://reneefrench.blogspot.com/][Renee French]]
-
-// ## Event-Driven Architecture
-// - https://www.oreilly.com/library/view/software-architecture-patterns/9781491971437/ch02.html
-// The event-driven architecture pattern is a popular distributed asynchronous architecture pattern used to produce highly scalable applications.
-// It is also highly adaptable and can be used for small applications and as well as large, complex ones.
-// The event-driven architecture is made up of highly decoupled, single-purpose event processing components that asynchronously receive and process events.
-//
-// Broker Topology
-// The broker topology differs from the mediator topology in that there is no central event mediator; rather, the message
-// flow is distributed across the event processor components in a chain-like fashion through a lightweight message broker
-// (e.g., ActiveMQ, HornetQ, etc.). This topology is useful when you have a relatively simple event processing flow and you
-// do not want (or need) central event orchestration.
-//
-// There are two main types of architecture components within the broker topology: a broker component and an event processor component. The broker component can be centralized or federated and contains all of the event channels that are used within the event flow. The event channels contained within the broker component can be message queues, message topics, or a combination of both.
-//
-// - https://docs.microsoft.com/en-us/azure/architecture/patterns/event-sourcing
-//
-// Instead of storing just the current state of the data in a domain,
-// use an append-only store to record the full series of actions taken on that data.
-// The store acts as the system of record and can be used to materialize the domain objects.
-// Events are immutable and can be stored using an append-only operation.
-// Events typically have meaning for a domain expert
-// The append-only storage of events provides an audit trail
-// The event store raises events, and tasks perform operations in response to those events.
-//
-// https://en.wikipedia.org/wiki/Domain-driven_design#Event_sourcing
-//
-// Event sourcing is an architectural pattern in which entities do not track
-// their internal state by means of direct serialization or object-relational
-// mapping, but by reading and committing events to an event store.
-//
-// When event sourcing is combined with CQRS and domain-driven design,
-// aggregate roots are responsible for validating and applying commands
-// (often by having their instance methods invoked from a Command Handler),
-// and then publishing events. This is also the foundation upon which the
-// aggregate roots base their logic for dealing with method invocations.
-// Hence, the input is a command and the output is one or many events which
-// are saved to an event store, and then often published on a message broker
-// for those interested (such as an application's view).
-//
-//
-// https://martinfowler.com/eaaDev/EventSourcing.html
-//
-// We can query an application's state to find out the current state of the
-// world, and this answers many questions. However there are times when we
-// don't just want to see where we are, we also want to know how we got there.
-//
-// Event Sourcing ensures that all changes to application state are stored
-// as a sequence of events. Not just can we query these events, we can also
-// use the event log to reconstruct past states, and as a foundation to
-// automatically adjust the state to cope with retroactive changes.
-//
-//
-// ## TODO: something about Event driven architecture / Event sourcing
-//
-// - Domain-Driven Design (DDD)
-// - Event driven architecture
-// - CQRS
-// - Vertical slice
-// - Based on the learnings from the Tahiti project
-//
-// ========================================================================================================================
+.image imgs/gopher.svg
+.caption inspired by [[https://github.com/egonelbre/gophers][egonelbre]]
 
 ## Event driven architecture
 
@@ -125,6 +71,7 @@ entity.
 .caption [[https://cqrs.files.wordpress.com/2010/11/cqrs_documents.pdf][CQRS Documents by Greg Young]]
 
 In English, it'd be the _past simple_.
+
 
 ## Some real life examples and learnings
 
@@ -198,7 +145,6 @@ or any other storage.
 
 Access rights to to the events, the data, would be access to consume or publish on a message topic or queue.
 
-
 ## Plug and play features
 
 "We need to send an email after a order is completed"
@@ -258,7 +204,11 @@ let's use them!
 
 .code snippets.go /start_consumer_handler OMIT/,/end_consumer_handler OMIT/ HL_shutdown
 
-## Behind the scenes - the consumer
+## Behind the scenes - the implementation
+
+## The consumer
+
+.code snippets.go /start_consumer_interface OMIT/,/end_consumer_interface OMIT/
 
 ## Run does not block
 
@@ -276,7 +226,15 @@ let's use them!
 
 .code snippets.go /start_run_loop OMIT/,/end_run_loop OMIT/ HL_shutdown
 
-## It works
+## The Producer
+
+## The Producer interface
+
+.code snippets.go /start_producer_interface OMIT/,/end_producer_interface OMIT/
+
+## last, but not least
+
+## It works!
 
 - a rather simple implementation
 - we can collect the same metrics we do for HTTP services
@@ -284,13 +242,26 @@ let's use them!
 - it's library, easy to roll out changes across teams and services
 
 
-## some catches
+## some conscious choices
 
 - the `Event` type is too generic, it can be tailored to our needs
-- even though the messages are delivered in order, the Go scheduler might process them out of order
 - some services need to process the messages in the order they arrive
-- it's quite hard to abstract 100% that it uses Kafka behind the scenes
+- even though the messages are delivered in order, the Go scheduler might process them out of order
+(the library already has a solution for that)
+- it's quite hard to abstract 100% that it uses Kafka behind the scenes, so far the costs
+outweighs the gains :/
 
 ## Questions?
 
-// .image imgs/BL_final.png 500 _
+.image imgs/DRAWING_GOPHER.png 500 _
+
+## References
+
+https://www.oreilly.com/library/view/software-architecture-patterns/9781491971437/ch02.html
+
+https://docs.microsoft.com/en-us/azure/architecture/patterns/event-sourcing
+
+https://en.wikipedia.org/wiki/Domain-driven_design#Event_sourcing
+
+https://martinfowler.com/eaaDev/EventSourcing.html
+

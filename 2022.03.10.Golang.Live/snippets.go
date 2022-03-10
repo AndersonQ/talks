@@ -161,3 +161,32 @@ func consume() {
 	// end_consumer_handler OMIT
 
 }
+
+// start_consumer_interface OMIT
+type Consumer interface {
+	Run(timeout time.Duration)
+	Shutdown(ctx context.Context) error
+}
+
+// end_consumer_interface OMIT
+
+// start_producer_interface OMIT
+type Producer interface {
+	// Send sends an event to the given topic
+	// Deprecated. use SendCtx instead
+	Send(event Event, topic string) error // HL
+	// SendCtx send an event to the given topic.
+	// It also adds the OTel propagation headers and the X-Tracking-Id if not set
+	// already.
+	SendCtx(ctx context.Context, eventName string, event Event, topic string) error // HL
+	// SendWithTrackingID adds the tracking ID to the event's headers and sends
+	// it to the given topic
+	// Deprecated. use SendCtx instead
+	SendWithTrackingID(trackingID string, event Event, topic string) error
+	// HandleEvents starts to listen to the producer events channel
+	HandleEvents() error
+	// Shutdown gracefully shuts down the producer, it respects the context timeout.
+	Shutdown(ctx context.Context) error // HL
+}
+
+// end_producer_interface OMIT
