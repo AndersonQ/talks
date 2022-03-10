@@ -1,0 +1,267 @@
+# Event sourcing with Go
+10 March 2022
+
+Anderson Queiroz
+Senior Software Engineer
+Elastic
+
+@AinSoph
+
+contato@andersonq.eti.br
+
+https://www.linkedin.com/in/andersonq/
+
+https://github.com/AndersonQ/talks
+
+https://pkg.go.dev/github.com/blacklane/go-libs/x/events@master
+
+
+## whoami
+
+- Brazilian
+
+- Living in Berlin since 2018
+
+- ~15 years coding (I started when I was an adolescent)
+
+- 4+ writing Go
+
+- Gopher!
+
+## Agenda
+
+ - Concepts
+ - Some real life examples and learnings
+ - Events library - as user
+ - Events library - behind the scenes
+
+## Let's Go
+
+.image imgs/gopher.svg
+.caption inspired by [[https://github.com/egonelbre/gophers][egonelbre]]
+
+## Event driven architecture
+
+Event driven architecture is a pattern where the components of the system communicate asynchronously by publishing and
+consuming messages or events. Usually the communication happens through a message broker, such as Kafka, RabbitMQ and etc.
+
+
+## Event sourcing
+
+Event sourcing is a pattern where data is stored in an append only format. When modifying an entity, instead of editing
+it's current state a new event is created and appended to the entity, or aggregate, events. The current state of an
+aggregate is the result of applying all the events in order. These events are immutable, it's only possible to append
+a new event to the aggregate chain of events.
+
+It allows not only to query the current state, but also reconstruct the state at any given point in time as well as
+how the entity got to its current state.
+
+## Event sourcing + Event driven architecture
+
+The combination of event sourcing and an event driven architecture allows different applications to be able to react or
+process changes on an entity state as well as examine the past and analyse what, when and how changes were made to an
+entity.
+
+## What is a Event?
+
+> An event is something that has happened in the past.
+> All events should be represented as verbs in the past tense such as CustomerRelocated, CargoShipped, or InventoryLossageRecorded.
+> For those who speak French, it should be in Passé Composé, they are things that have completed in the past.
+
+.caption [[https://cqrs.files.wordpress.com/2010/11/cqrs_documents.pdf][CQRS Documents by Greg Young]]
+
+In English, it'd be the _past simple_.
+
+
+## Some real life examples and learnings
+
+## The request-response events
+
+_"[...] communicate asynchronously through events."_
+
+>_Service A_: emits an event "FooThing**Requested**"
+
+>_Service B_: listens to "FooThing**Requested**", process it and emits "FooThing**Response**"
+
+>_Service A_: listens to "FooThing**Response**"
+
+it smells like... ahn... HTTP over messages?
+
+##
+
+It's not a hard rule or a mandate. Not all communication is well suited to be event based.
+
+Most of the time, if not
+always, a mix of synchronous (e.g. HTTP), and asynchronous (e.g. message brokers), will be necessary.
+
+If an immediate feedback is needed, probably a sync HTTP approach will do better.
+
+## Multiple services, the same entity
+
+>_Entity_: `rides`
+
+>_Rides service_: emits _RideCreated_
+
+>_Ride Matcher service_: listens to _RideCreated_, find a chauffeur and emits _RideChauffeurAssigned_
+
+>_Rides service_: updates the ride
+
+Two services publishing events that belong to the same entity...
+
+It's analogous to two services updating the same row in a relational database.
+
+##
+
+Two domains or entities:
+ - ride
+ - ride fulfillment
+
+A ride is, basically, pickup, dropoff, guest and chauffeur.
+
+Ride fulfillment is all needed to find a chauffeur to go from pickup to dropoff.
+
+Ride is clearly an entity, and an entity is own by one, and only one, service. Therefore a as a rule
+of thumb: "one publisher, multiple consumers".
+
+##
+
+A solution:
+
+>_Kafka topics_: rides, rides-fulfillment
+
+>_Rides service_: emits _RideCreated_ on the _rides_ topic
+
+>_Ride Matcher service_: listens to _RideCreated_, find a chauffeur and emits _ChauffeurFound_ on the rides-fulfillment topic
+
+>_Rides service_: listens to _ChauffeurFound_ on the rides-fulfillment topic, assigns the chauffeur to the ride and then
+publishes _RideAccepted_
+
+## Where is the data?
+
+## Everywhere, it's distributed.
+
+As in any distributed system, the data isn't centralised, it's spread among different databases, topics on message brokers,
+or any other storage.
+
+Access rights to to the events, the data, would be access to consume or publish on a message topic or queue.
+
+## Plug and play features
+
+"We need to send an email after a order is completed"
+
+- new service (?)
+- listen to order events
+- fetch order data
+- send the email
+
+no change on order service required!
+
+##
+
+"We want to know how often an order has its address changed"
+
+Just look at the past order events. No preparation needed, no need to wait gather data to then analyse.
+
+## Handling events in Go
+
+## Listening to events
+
+.image imgs/raw.png 480 _
+
+it's ... too raw
+
+## HTTP-like abstraction
+
+We're all quite familiar with HTTP concepts like
+
+- request
+- response
+- handler
+- middleware
+
+and the HTTP server takes care of processing the request concurrently
+
+let's use them!
+
+## The basis
+
+.code snippets.go /start_event_type OMIT/,/end_event_type OMIT/
+
+## The helpers
+
+.code snippets.go /start_event_helpers OMIT/,/end_event_helpers OMIT/
+
+## Handling events
+
+## The handler
+.code snippets.go /start_consumer_handler OMIT/,/end_consumer_handler OMIT/
+
+## Start consuming events
+
+.code snippets.go /start_consumer_handler OMIT/,/end_consumer_handler OMIT/ HL_run
+
+## Graceful shutdown
+
+.code snippets.go /start_consumer_handler OMIT/,/end_consumer_handler OMIT/ HL_shutdown
+
+## Behind the scenes - the implementation
+
+## The consumer
+
+.code snippets.go /start_consumer_interface OMIT/,/end_consumer_interface OMIT/
+
+## Run does not block
+
+.code snippets.go /start_run_loop OMIT/,/end_run_loop OMIT/ HL_loop_init
+
+## Receiving the messages
+
+.code snippets.go /start_run_loop OMIT/,/end_run_loop OMIT/ HL_get_message
+
+## Handling events
+
+.code snippets.go /start_run_loop OMIT/,/end_run_loop OMIT/ HL_handle
+
+## Graceful shutdown
+
+.code snippets.go /start_run_loop OMIT/,/end_run_loop OMIT/ HL_shutdown
+
+## The Producer
+
+## The Producer interface
+
+.code snippets.go /start_producer_interface OMIT/,/end_producer_interface OMIT/
+
+## last, but not least
+
+## It works!
+
+- a rather simple implementation
+- we can collect the same metrics we do for HTTP services
+- middleware allows to easily integrate APM, tracing and so on
+- it's library, easy to roll out changes across teams and services
+
+
+## some conscious choices
+
+- the `Event` type is too generic, it can be tailored to our needs
+- some services need to process the messages in the order they arrive
+- even though the messages are delivered in order, the Go scheduler might process them out of order
+(the library already has a solution for that)
+- it's quite hard to abstract 100% that it uses Kafka behind the scenes, so far the costs
+outweighs the gains :/
+
+## Questions?
+
+.image imgs/DRAWING_GOPHER.png 500 _
+
+## References
+
+https://www.oreilly.com/library/view/software-architecture-patterns/9781491971437/ch02.html
+
+https://docs.microsoft.com/en-us/azure/architecture/patterns/event-sourcing
+
+https://en.wikipedia.org/wiki/Domain-driven_design#Event_sourcing
+
+https://martinfowler.com/eaaDev/EventSourcing.html
+
