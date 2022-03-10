@@ -2,6 +2,7 @@
 
 Here I list all my talks :)
 
+ - [2022 - Event Sourcing with Go](2022.03.10.Golang.Live)
  - [2021 - Monitoring applications with OpenTelemetry](2021.11.13.Gophers.Nigeria.Meetup)
  - [2021 - From The Monolith to An Event Driven Architecture](2021.04.14.GDG.Berlin.Golang)
  - [2020 - Testing in Go: from basic to advanced - Golang Live](2020.12.10.Golang.Live)
