@@ -29,3 +29,89 @@ https://github.com/AndersonQ/talks
 
 .image imgs/gopher.sage.svg
 .caption Gopher by [[https://github.com/egonelbre/gophers/blob/d063046976edceac95f732c206ea8e6de121019d/vector/fairy-tale/sage.svg][egonelbre]]
+
+## Agneda
+
+ -
+
+## What is debugging, a wee history
+
+The creation of the ter _debugging_ is attributed to Grace Hopper, Admiral.
+Her associate discovered a a moth stuck in a relay on the Mark II computer at
+Harvard University, which was causing the computer to malfunction. Hopper said
+they were "debugging" the system.
+
+However the usage of _bug_ as an error or fault in a system dates bato to
+1878 when Thomas Edison described _little faults and difficulties_ of mechanical
+engineering as _Bugs_.
+
+
+[Wikipedia - debugging](https://en.wikipedia.org/wiki/Debugging#Etymology)
+
+## What is debugging
+
+ - investigating an issue or error
+ - using a debugger
+
+Thus it's possible to debug without a debugger, but not the other way around.
+We'll talk today about the latter, using a debugger.
+
+## What does a debugger do
+
+ - it controls time and reality!
+
+.image imgs/doctorwho.gopher.png _ 400
+
+.caption Gopher by [[https://github.com/ashleymcnamara/gophers/blob/4d9a43e716607323146e26ec857e7e04ad820307/Doctor_Who_Gopher.png][ashleymcnamara]]
+
+## What does a debugger do
+
+In short,
+ - stop program execution -> set breakpoints
+ - execute line by line
+ - step into or over function calls
+ - examine variable values
+ - set variable values
+ - and much more
+
+## Our scenario
+
+We want to debug an application that:
+ - has an installation process
+ - run as a system service (managed by systemd or the Mac and Windows equivalent)
+ - runs an manages other applications (we want to debug these others too)
+ - can have only one instance running in the same machine
+ - it needs to connect to other applications, either local or on the internet
+
+## Delve, the Go debugger
+
+.image imgs/delve.png _ 800
+
+available commands : https://github.com/go-delve/delve/blob/master/Documentation/cli/README.md
+
+## Using Delve
+
+There are several ways we can use delve to start a debugging session. They drills
+down to two scenarios:
+
+ - let Delve compile, run and start the debugging session
+ - use Delve to debug a running program -> attach to a running process
+
+We will focus in the latter, as it's the more complex case.
+
+## Our architecture
+
+ - We'll debug the Elastic Agent or Beats
+ - They'll will run on a Vagrant VM
+ - Elasticsearch and Fleet Server will run on Elastic Cloud (for simplicity)
+
+.image imgs/debugging.diagram.svg
+
+## Compiling for debugging
+
+In oder to be able to debug a program we need the binary we want to debug to have:
+
+ - debugging symbols
+   - allow the debugger to "control and understand the running program"
+ - don't auto inline functions
+   - keep the "running"
