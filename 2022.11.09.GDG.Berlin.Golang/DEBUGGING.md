@@ -1,107 +1,281 @@
-# Elastic Agent developer docs
+# Debugging the Elastic-Agent
 
-The source files for the general Elastic Agent documentation are currently stored
-in the [observability-docs](https://github.com/elastic/observability-docs) repo. The following docs are only focused on getting developers started building code for Elastic Agent.
+The Elastic-Agent is a bit trickier to debug as it's basically never run it directly, most of the
+time it's installed and a system service is registered to run it. Besides, it also starts several
+other applications, mainly the Beats. This how-to shows how to remotely debug an elastic-agent
+or beats running on another machine.
 
-Prerequisites:
-- [Mage](https://github.com/magefile/mage)
-- [Go](https://go.dev/dl/)
-- [Make](https://www.gnu.org/software/make/)
+## In a hurry? Go to [tl;dr](#tl;dr)
 
-## Building
+## Requirements
 
-To build and package (generate the tar/zip/whatever with the agent, beats and everything else it needs):
+To remote debug we'll need:
+- [Delve](https://github.com/go-delve/delve)
+- Any Delve [frontend client](https://github.com/go-delve/delve/blob/master/Documentation/EditorIntegration.md).
+  Delve already comes with a terminal client and your IDE is likely one as well.
+
+To follow along, you'll also need:
+- [Vagrant](https://www.vagrantup.com/downloads)
+- [VirtualBox](https://www.virtualbox.org/wiki/Downloads)
+
+## What we'll do
+
+- compile the elastic-agent (and optionally the beats) to allow debugging
+- start a Vagrant VM. Delve will already be installed there :)
+- install and enroll the elastic-agent on this VM
+- spin up a Delve backend server connected to the running elastic-agent on the VM
+- use Delve's terminal client to connect to the Delve server on the VM
+- set up a breakpoint
+- make the elastic-agent to hit the breakpoint
+
+## Compile the Elastic-Agent for debug
+
+It's necessary to compile the elastic-agent with the [`DEV=true`](https://github.com/elastic/elastic-agent/blob/main/dev-tools/mage/build.go#L54)
+to add the debug symbols and disable optimisations. Setting `SNAPSHOT=true` so the
+agent will skip signature verification of the
+binaries it runs as well as will download them from the snapshop artifacts API.
+
+Set `PLATFORMS` and `PACKAGES` environment variables to match yours or the target system.
+Use `EXTERNAL=true` if you do not want to compile the beats, downloading them instead.
+
+TODO: check if the SNAPSHOT builds are build with `DEV=true`, if not, make so.
+
+On the elastic-agent's repo root run:
 ```shell
 DEV=true SNAPSHOT=true EXTERNAL=true PLATFORMS="linux/amd64" PACKAGES="tar.gz" mage -v clean package
 ```
-Where:
-- `PLATFORMS` defines to which platform to build and package. See [`magefile.go`](magefile.go#L410)
-  for the supported platforms.
-- `PACKAGES` defines which packages to generate.
-- `EXTERNAL` if set to true, the beats will be downloaded, they'll be built otherwise.
-- `SNAPSHOT` if set to true the agent will use the staging artifacts API to download them.
-- `DEV` if set to true the agent will not verify the beats/applications GPG signatures and
-  will build the agent with debug symbols and disable inlining and optimizations. Using
-  `dev:package` or `dev:buiid` automatically set `DEV=true`.
-
 the elastic-agent artifact will be placed on `build/distributions`.
 
-## Debugging
+### Elastic Stack
 
-See [Debugging the Elastic-Agent](docs/elastic-agent-debugging.md)
+In order to enroll an elastic-agent with Fleet a Elastic Stack is needed. The
+easiest way is to spin up one on [Elastic Cloud](https://cloud.elastic.co).
+<!-- TODO: Anyway
+[`elastic-package`](https://github.com/elastic/elastic-package/releases) works too.
+The elastic-package uses docker and docker compose to spin up the stack.
 
-## Testing
 
-### Testing docker container
+I haven't managed to use elastic-package for the stack and a VM to install the
+elastic-agent as right now elastic-package creates the stack using the docker internal DNS,
+http://elasticsearch:9200' and http://fleet-server:8220, and the elastic-agent seems to not be able
+to correctly override them. Also Kibana does not accept to [edit those](http://localhost:5601/app/fleet/settings)
+as it rejects HTTP, accepting only HTTPS. :(
+Editing `/etc/hosts` on the VM to map `fleet-server/elasticsearch` to their IPs is an option.
 
-Running Elastic Agent in a docker container is a common use case. To build the Elastic Agent and create a docker image run the following command:
+Download and run `elastic-package` on your machine:
 
-```
-DEV=true SNAPSHOT=true PLATFORMS=linux/amd64 TYPES=docker mage package
+```shell
+curl -s https://api.github.com/repos/elastic/elastic-package/releases/latest \
+| grep "browser_download_url.*linux_amd64.tar.gz" \
+| cut -d : -f 2,3 \
+| tr -d \" \
+| wget -i -
+tar -xf elastic-package*.tar.gz
+
+eval "$(elastic-package stack shellinit)"
+./elastic-package stack up --version 8.3.0-SNAPSHOT
 ```
 
-If you are in the 7.13 branch, this will create the `docker.elastic.co/beats/elastic-agent:7.13.0-SNAPSHOT` image in your local environment. Now you can use this to for example test this container with the stack in elastic-package:
+Kibana will be available on [localhost:5601](localhost:5601). The default credencials are:
+> username: elastic
+> password: changeme
 
+If you're using `elastic-package`, you'll need to determine the IP of the fleet-server
+container.
+
+```shell
+docker ps
+# look for elastic-package-stack_fleet-server_1 or something similar
+# CONTAINER ID   IMAGE                                                           COMMAND                  CREATED        STATUS                  PORTS                                NAMES
+# 860c517bdd66   docker.elastic.co/beats/elastic-agent-complete:8.3.0-SNAPSHOT   "/usr/bin/tini -- /u…"   17 hours ago   Up 17 hours (healthy)   127.0.0.1:8220->8220/tcp             elastic-package-stack_fleet-server_1
+docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' CONTAINER_ID # this will output the container IP
 ```
-elastic-package stack up --version=7.13.0-SNAPSHOT -v
+-->
+
+## Spin up a VM using Vagrant
+
+There is a [Vagrantfile](https://github.com/elastic/elastic-agent/blob/main/Vagrantfile)
+on the repository root. A `dev` VM is defined there, it forwards the port `4242` to
+the hosts `4242` port and mounts the repository's root to `/vagrant`.
+
+To spin up and connect to the VM:
+
+```shell
+vagrant up dev
+vagrant ssh dev
 ```
 
-Please note that the docker container is built in both standard and 'complete' variants.
-The 'complete' variant contains extra files, like the chromium browser, that are too large
-for the standard variant.
+It can be destroyed with:
+```shell
+vagrant destroy dev
+```
 
-### Testing Elastic Agent on Kubernetes
+## Delve, the debugger
 
-#### Prerequisites
-- create kubernetes cluster using kind, check [here](https://github.com/elastic/beats/blob/main/metricbeat/module/kubernetes/_meta/test/docs/README.md) for details
-- deploy kube-state-metrics, check [here](https://github.com/elastic/beats/blob/main/metricbeat/module/kubernetes/_meta/test/docs/README.md) for details
-- deploy required infrastructure:
-    - for elastic agent in standalone mode: EK stack or use [elastic cloud](https://cloud.elastic.co), check [here](https://github.com/elastic/beats/blob/main/metricbeat/module/kubernetes/_meta/test/docs/README.md) for details
-    - for managed mode: use [elastic cloud](https://cloud.elastic.co) or bring up the stack on docker and then connect docker network with kubernetes kind nodes:
-  ```
-  elastic-package stack up -d -v
-  docker network connect elastic-package-stack_default <kind_container_id>
-  ```
+There are several options to [invoke Delve](https://github.com/go-delve/delve/blob/master/Documentation/usage/dlv.md)
+to debug a program. In short
+```shell
+dlv <delve flags> <delve command> <target to debug> -- <args to the target>
+# Eg:
+dlv --headless=true exec ./elastic-agnet -- diagnostics collect
+```
 
-1. Build elastic-agent:
-```bash
-DEV=true PLATFORMS=linux/amd64 TYPES=docker mage package
-```
-2. Build docker image:
-```bash
-cd build/package/elastic-agent/elastic-agent-linux-amd64.docker/docker-build
-docker build -t custom-agent-image .
-```
-3. Load this image in your kind cluster:
-```
-kind load docker-image custom-agent-image:latest
-```
-4. Deploy agent with that image:
-- download all-in-ome manifest for elastic-agent in standalone or managed mode, change version if needed
-```
-ELASTIC_AGENT_VERSION="8.0"
-ELASTIC_AGENT_MODE="standalone"     # ELASTIC_AGENT_MODE="managed"
-curl -L -O https://raw.githubusercontent.com/elastic/elastic-agent/${ELASTIC_AGENT_VERSION}/deploy/kubernetes/elastic-agent-${ELASTIC_AGENT_MODE}-kubernetes.yaml
-```
-- Modify downloaded manifest:
-    - change image name to the one, that was created in the previous step and add `imagePullPolicy: Never`:
-    ```
-    containers:
-      - name: elastic-agent
-        image: custom-agent-image:latest
-        imagePullPolicy: Never
-    ```
-    - set environment variables accordingly to the used setup.
+### Remote debug
 
-  Elastic-agent in standalone mode: set `ES_USERNAME`, `ES_PASSWORD`,`ES_HOST`.
+In order to remote debug an application we need 3 things:
+- the process we want to debug
+- a Delve instance running as a server:
+  - it'll attach or run the process we want to debug
+- a frontend client, which will connect to the Delve server.
+  - Usually your IDE can connect directly to the Delve server
 
-  Elastic-agent in managed mode: set `FLEET_URL` and `FLEET_ENROLLMENT_TOKEN`.
+### Delve backend server
 
-- create
+In order to run Delve as a backend server the `--headless` cli flag is used.
+It can be used with any command (`debug`, `test`, `exec`, `attach`, `core` or `replay`).
+Therefore we can either attach to a running process (`dlv attach`) or start it
+through Delve (`dlv exec|debug`).
+
+As the elastic-agent and beats are already running, we'll attach to them with:
+```shell
+dlv --listen=:4242 --headless=true --api-version=2 --accept-multiclient attach PID
 ```
-kubectl apply -f elastic-agent-${ELASTIC_AGENT_MODE}-kubernetes.yaml
+where:
+- `--listen=:4242`: server address, here we're just passing in the port `4242`
+- `--headless=true`: run only the server, in headless mode
+- `--api-version=2`: defines the JSON-RPC API version
+- `--accept-multiclient`: allows multiple client connections
+
+### Client connecting to the Delve server
+
+There are several options for [frontend clients](https://github.com/go-delve/delve/blob/master/Documentation/EditorIntegration.md). [Goland](https://www.jetbrains.com/help/go/attach-to-running-go-processes-with-debugger.html#step-3-create-the-remote-run-debug-configuration-on-the-client-computer),
+[VS Code](https://github.com/golang/vscode-go/blob/master/docs/debugging.md#launchjson-attributes) and [Emacs](https://emacs-lsp.github.io/dap-mode/page/configuration/#go) all have plugins for Delve.
+
+#### Delve terminal client
+
+For the sake of keeping this guide generic, let's use Delve terminal client.
+If you followed along up to here, you should have a Vagrant box that:
+- forwards its port 4242 to you your localhost:4242
+- has an elastic-agent running
+- has a Delve server attached to the running elastic agent listening on port 4242
+
+Now you can connect to the remote Delve server using Delve's terminal client. Let's
+do it, set a breakpoint and see it all working.
+
+We'll set a breakpoint on the
+elastic-agent's `status` command, so we can easily hit this breakpoint whenever
+we want. By the time this guide was written the code for the status command was
+located on [internal/pkg/agent/control/server/server.go:152](https://github.com/elastic/elastic-agent/blob/main/internal/pkg/agent/control/server/server.go#L152).
+
+- On the host (a.k.a your machine)
+```shell
+dlv connect localhost:4242
+# it'll open Delve's console
+b internal/pkg/agent/control/server/server.go:152 # sets the breakpoint
+c # continues the execution until the code hits any breakpoint
 ```
-5. Check status of elastic-agent:
+
+- On the VM
+```shell
+sudo /opt/Elastic/Agent/elastic-agent status
 ```
-kubectl -n kube-system get pods -l app=elastic-agent
+You should see Delve stopping on the breakpoint. \o/ it works!
+
+
+## tl;dr
+
+Have your [elastic-stack](#elastic-stack) ready.
+
+### On your machine
+```shell
+cd /path/to/your/elastic-agent/repo
+# Omit EXTERNAL=true to compile the beats as well
+DEV=true SNAPSHOT=true EXTERNAL=true PLATFORMS="linux/amd64" PACKAGES="tar.gz" mage -v clean package
+vagrant up dev
+vagrant ssh dev
 ```
+
+### On the Vagrant machine
+
+```shell
+sudo -i # it's easier to be root as you'll need root permissions to interact with the elastic-agent
+rm -rf elastic-agent* && \
+cp /vagrant/build/distributions/elastic-agent-*.tar.gz ./ && \
+mkdir -p elastic-agent && \
+tar --strip-components=1 -xf elastic-agent-*.tar.gz -C elastic-agent && \
+cd elastic-agent
+# Install and enroll the elastic agent (or run stand alone)
+# --non-interactive: not prompt for confirmation
+# --force: replaces a previously installed elastic-agent if any is present
+# --insecure: allows HTTP for fleet-server endpoint
+./elastic-agent install --non-interactive --force --insecure --url=SOME_URL --enrollment-token=SOME_TOKEN
+```
+
+<!--
+TODO:
+sudo ./elastic-agent install --non-interactive --force --insecure \
+ --fleet-server-host=http://172.18.0.6 \
+ --fleet-server-port=8220
+-->
+
+- find the process PID to connect to
+```shell
+ps aux | grep elastic-agent # or filebeat, metricbeat, ...
+```
+```shell
+root@ubuntu-impish:~# ps aux | grep elastic-agent
+root       24953  0.7  3.0 1799448 62296 ?       Ssl  08:29   0:05 /opt/Elastic/Agent/elastic-agent
+root        8891  0.0  0.0      0     0 ?        Zs   12:59   0:00 [elastic-agent] <defunct>
+root        8916  0.0  0.0      0     0 ?        Zs   12:59   0:00 [elastic-agent] <defunct>
+```
+
+Ignore any `[elastic-agent] <defunct>`, we want the `/opt/Elastic/Agent/elastic-agent`,
+here it's PID 24953.
+Now that we now the PID, we can attach Delve to it:
+
+```shell
+dlv --listen=:4242 --headless=true --api-version=2 --accept-multiclient attach 24953
+```
+
+### Back to your machine
+
+```shell
+dlv connect localhost:4242
+# it'll open Delve's console
+b internal/pkg/agent/control/server/server.go:152 # sets the breakpoint
+c # continues the execution until the code hits any breakpoint
+```
+
+- on another terminal:
+```shell
+vagrant ssh dev
+```
+
+### On the new session on the VM
+
+```shell
+sudo /opt/Elastic/Agent/elastic-agent status
+```
+
+
+## Troubleshooting
+
+### (dlv) no such file or directory
+Probably the source code path at compile time differs from the one you have.
+Use [`config substitute-path`](https://github.com/go-delve/delve/tree/master/Documentation/cli#config) to
+adjust it. The error below
+
+```text
+> github.com/elastic/elastic-agent/internal/pkg/agent/control/server.(*Server).ProcMeta() /go/src/github.com/elastic/elastic-agent/internal/pkg/agent/control/server/server.go:240 (hits goroutine(894):1 total:1) (PC: 0x56424d219d19)
+Command failed: open /go/src/github.com/elastic/elastic-agent/internal/pkg/agent/control/server/server.go: no such file or directory
+```
+can be fixed with
+
+```text
+(dlv) config substitute-path /go/src/github.com/elastic/elastic-agent /vagrant
+```
+
+### (dlv) Warning: debugging optimized function
+
+Ensure optimizations and inlining are disabled. Build the elastic-agent and beats with
+`DEV=true` so `-gcflags=all=-N -l` will be passed to the Go compiler.
