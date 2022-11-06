@@ -1,0 +1,31 @@
+# Debugging complex applications in Go
+09 November 2022
+
+Anderson Queiroz
+Senior Software Engineer
+Elastic
+
+@AinSoph
+
+me@andersonq.me
+
+https://www.linkedin.com/in/andersonq/
+
+https://github.com/AndersonQ/talks
+
+## whoami
+
+- Brazilian
+
+- Living in Berlin since 2018
+
+- ~15 years coding (I started when I was an adolescent)
+
+- 4+ writing Go
+
+- Gopher!
+
+## Let's Debug!
+
+.image imgs/gopher.sage.svg
+.caption Gopher by [[https://github.com/egonelbre/gophers/blob/d063046976edceac95f732c206ea8e6de121019d/vector/fairy-tale/sage.svg][egonelbre]]
