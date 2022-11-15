@@ -113,20 +113,18 @@ In oder to be able to debug a program we need the binary we want to debug to hav
 
 ## Compiling for debugging
 
-**Go compiler flags:**
+**Go compiler flags (we need them):**
 ```
 -N -> Disable optimizations.
 -l -> Disable inlining.
 ```
-We need them.
 
-**Go linker flags:**
+**Go linker flags (we cannot have them):**
 
 ```
 -s -> Omit the symbol table and debug information.
 -w -> Omit the DWARF symbol table.
 ```
-We cannot have them.
 
 We use `go build` that takes care of compiling linking and everything else needed.
 
@@ -139,12 +137,13 @@ and make sure there isn't a
 -ldflags="-s -w"
 ```
 
-## Compiling for debugging
-
-TODO: show the whole full line for the EA
-
 If Delve compiles the code, it'll take care of passing in the necessary
 flags.
+
+## Compiling for debugging
+
+.code snippets/go.build.agent
+
 
 ## Debugging
 
@@ -277,7 +276,7 @@ Depending on how you're running the remote debug session you might find that
 Delve isn't finding the source code.
 
 In short it happens because the path where the source code was compiled is different
-from the 
+from the
 
 ## TODO: demo
 

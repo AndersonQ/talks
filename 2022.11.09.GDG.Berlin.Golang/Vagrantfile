@@ -1,5 +1,3 @@
-
-# Read the branch's Go version from the .go-version file.
 GO_VERSION = "1.19.3"
 
 Vagrant.configure("2") do |config|
@@ -8,7 +6,7 @@ Vagrant.configure("2") do |config|
     vbox.cpus = 6
     end
 
-    config.vm.define "dev" do |nodeconfig|
+    config.vm.define "elastic-agent-dev" do |nodeconfig|
       nodeconfig.vm.box = "ubuntu/jammy64"
 
       nodeconfig.vm.hostname = "elastic-agent-dev"
