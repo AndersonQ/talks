@@ -270,18 +270,16 @@ The `dlv dap` is not compatible with `dlv connect` or GoLand
 
 Check the [VS Code debugging](https://github.com/golang/vscode-go/blob/master/docs/debugging.md#attach) docs for more details.
 
-## The catch: where is the source code?
+## A catch: where is the source code?
 
 Depending on how you're running the remote debug session you might find that
 Delve isn't finding the source code.
 
 In short it happens because the path where the source code was compiled is different
-from the
-
-## TODO: demo
-
-## TODO: show path fix
+from the path where Delve is executed from. This can be fixed with `config substitute-path`:
 
 ```
-(dlv) config substitute-path /go/src/github.com/elastic/elastic-agent /vagrant
+(dlv) config substitute-path /original/path /new/path
 ```
+
+## Demo time!
