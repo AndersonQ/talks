@@ -21,6 +21,7 @@ dlv connect localhost:4242
 
 # 2nd terminal
 # stops, but where is the code?
+p r.appReporters
 c // should see status command output on terminal 3
 
 # 3rd terminal

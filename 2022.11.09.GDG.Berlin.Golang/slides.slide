@@ -30,10 +30,6 @@ https://github.com/AndersonQ/talks
 .image imgs/gopher.sage.svg
 .caption Gopher by [[https://github.com/egonelbre/gophers/blob/d063046976edceac95f732c206ea8e6de121019d/vector/fairy-tale/sage.svg][egonelbre]]
 
-## Agneda
-
- -
-
 ## What is debugging, a wee history
 
 The creation of the term _debugging_ is attributed to Grace Hopper, Admiral.
@@ -86,8 +82,6 @@ We want to debug an application that:
 ## Delve, the Go debugger
 
 .image imgs/delve.png _ 800
-
-available commands : https://github.com/go-delve/delve/blob/master/Documentation/cli/README.md
 
 ## Using Delve
 
@@ -283,3 +277,7 @@ from the path where Delve is executed from. This can be fixed with `config subst
 ```
 
 ## Demo time!
+
+## Questions?
+
+Thank you!
