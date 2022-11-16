@@ -1,0 +1,20 @@
+// Development build
+go "build" "-o" "build/elastic-agent"
+  "-buildmode"
+  "pie"
+  "-gcflags=all=-N -l" // HL
+  "-ldflags" "-X github.com/elastic/elastic-agent/internal/pkg/release.snapshot=
+              -X github.com/elastic/elastic-agent/internal/pkg/release.allowEmptyPgp=true
+              -X github.com/elastic/elastic-agent/internal/pkg/release.allowUpgrade=true
+              -X github.com/elastic/elastic-agent/version.buildTime=2022-11-14T17:13:28Z
+              -X github.com/elastic/elastic-agent/version.commit=e7419ddc4e492e7e41acd20ec39f570937affe13
+
+// Production build
+go "build" "-o" "build/elastic-agent"
+  "-buildmode"
+  "pie"
+  "-trimpath"
+  "-ldflags" "-s // HL
+    -X github.com/elastic/elastic-agent/version.commit=e7419ddc4e492e7e41acd20ec39f570937affe13
+    -X github.com/elastic/elastic-agent/internal/pkg/release.snapshot=
+    -X github.com/elastic/elastic-agent/version.buildTime=2022-11-14T17:23:50Z"
