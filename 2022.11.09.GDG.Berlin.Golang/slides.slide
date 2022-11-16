@@ -266,7 +266,7 @@ dlv dap
 
 and then use VS Code to connect to it.
 
-The `dlv dap` is not compatible with `dlv connect` ro GoLand
+The `dlv dap` is not compatible with `dlv connect` or GoLand
 
 Check the [VS Code debugging](https://github.com/golang/vscode-go/blob/master/docs/debugging.md#attach) docs for more details.
 
