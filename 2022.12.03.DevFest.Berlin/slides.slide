@@ -1,0 +1,284 @@
+# Debugging complex Go applications
+03 December 2022
+
+Anderson Queiroz
+Senior Software Engineer
+Elastic
+
+@AinSoph
+
+me@andersonq.me
+
+https://www.linkedin.com/in/andersonq/
+
+https://github.com/AndersonQ/talks
+
+## whoami
+
+- Brazilian
+
+- Living in Berlin since 2018
+
+- ~15 years coding (I started when I was an adolescent)
+
+- 4+ writing Go
+
+- Gopher!
+
+## Let's Debug!
+
+.image imgs/gopher.sage.svg
+.caption Gopher by [[https://github.com/egonelbre/gophers/blob/d063046976edceac95f732c206ea8e6de121019d/vector/fairy-tale/sage.svg][egonelbre]]
+
+## What is debugging, a wee history
+
+The creation of the term _debugging_ is attributed to Grace Hopper, Admiral.
+Her associate discovered a moth stuck in a relay on the Mark II computer at
+Harvard University, which was causing the computer to malfunction. Hopper said
+they were "debugging" the system.
+
+However the usage of _bug_ as an error or fault in a system dates back to
+1878 when Thomas Edison described _little faults and difficulties_ of mechanical
+engineering as _Bugs_.
+
+
+[Wikipedia - debugging](https://en.wikipedia.org/wiki/Debugging#Etymology)
+
+## What is debugging
+
+ - investigating an issue or error
+ - using a debugger
+
+Thus it's possible to debug without a debugger, but not the other way around.
+We'll talk today about the latter, using a debugger.
+
+## What does a debugger do
+
+ - it controls time and reality!
+
+.image imgs/doctorwho.gopher.png _ 400
+
+.caption Gopher by [[https://github.com/ashleymcnamara/gophers/blob/4d9a43e716607323146e26ec857e7e04ad820307/Doctor_Who_Gopher.png][ashleymcnamara]]
+
+## What does a debugger do
+
+In short,
+ - stop program execution -> set breakpoints
+ - execute line by line
+ - step into or over function calls
+ - examine variable values
+ - set variable values
+ - and much more
+
+## Our scenario
+
+We want to debug an application that:
+ - has an installation process
+ - run as a system service (managed by systemd or the Mac and Windows equivalent)
+ - runs an manages other applications (we want to debug these others too)
+ - requires a specific folder structure and files to be present
+ - can have only one instance running in the same machine
+ - it needs to connect to other applications, either local or on the internet
+
+## Delve, the Go debugger
+
+.image imgs/delve.png _ 800
+
+## Using Delve
+
+There are several ways we can use delve to start a debugging session. They drills
+down to two scenarios:
+
+ - let Delve compile, run and start the debugging session
+ - use Delve to debug a running program -> attach to a running process
+
+We will focus in the latter, as it's the more complex case.
+
+## Compiling for debugging
+
+In oder to be able to debug a program we need the binary we want to debug to have:
+
+ - debugging symbols
+   - allow the debugger to "control and understand the running program"
+ - don't auto inline functions
+   - keep the matching between the source code and the compiled binary
+ - don't optimise the code
+   - keep it as it was written, again preserving the matching between source code
+   and the compiled binary
+
+## Compiling for debugging
+
+**Go compiler flags (we need them):**
+```
+-N -> Disable optimizations.
+-l -> Disable inlining.
+```
+
+**Go linker flags (we cannot have them):**
+
+```
+-s -> Omit the symbol table and debug information.
+-w -> Omit the DWARF symbol table.
+```
+
+We use `go build` that takes care of compiling linking and everything else needed.
+
+```
+go build -gcflags="all=-N -l" [...]
+```
+and make sure there isn't a
+
+```
+-ldflags="-s -w"
+```
+
+If Delve compiles the code, it'll take care of passing in the necessary
+flags.
+
+## Compiling for debugging
+
+.code snippets/go.build.agent
+
+
+## Debugging
+
+Now that we can produce a binary ready for debugging, we can connect Delve to it.
+
+We can let Delve execute it:
+
+```
+dlv exec <path/to/binary>
+Execute a precompiled binary and begin a debug session.
+```
+
+or attach to a running process:
+
+```
+dlv attach pid [executable] [flags]
+Attach to running process and begin debugging.
+```
+
+there are much more on Delve, check the [full docs](https://github.com/go-delve/delve/blob/master/Documentation/usage/dlv.md#dlv).
+
+## Our architecture
+
+ - We'll debug the Elastic Agent or Beats
+ - They'll will run on a Vagrant VM
+ - Elasticsearch and Fleet Server will run on Elastic Cloud (for simplicity)
+
+.image imgs/debugging.diagram.2.svg
+
+## Remote debugging
+
+Our application is running on another machine. It could be running on a docker
+container, on Kubernetes, on a cloud VM, on another physical machine, pretty
+much anywhere, as long as it isn't the same machine as the one we're debugging
+from.
+
+We need our debugger "to attach to a process running on the other computer".
+
+Delve can run as a server. The server runs locally alongside with
+the application we want to debug. This "Delve server" can attach to a running
+process and debug it.
+
+When running as a server, Delve waits a client to connect. The client will control
+what the server does, and the server is the one indeed debugging the application.
+
+## Remote debugging
+
+Delve itself can run as a server and a client. However once you have the server
+running, you can connect to it using your favourite IDE.
+
+There are several options for [clients](https://github.com/go-delve/delve/blob/master/Documentation/EditorIntegration.md). [Goland](https://www.jetbrains.com/help/go/attach-to-running-go-processes-with-debugger.html#step-3-create-the-remote-run-debug-configuration-on-the-client-computer),
+[VS Code](https://github.com/golang/vscode-go/blob/master/docs/debugging.md#launchjson-attributes) and [Emacs](https://emacs-lsp.github.io/dap-mode/page/configuration/#go) all have plugins for Delve.
+
+## Remote debugging
+
+Running Delve as a server is as simple as passing in the `--headless` to whatever
+option you choose to use to start the debugging sessions:
+
+```
+--headless
+
+Run debug server only, in headless mode.
+Server will accept both JSON-RPC or DAP client connections.
+```
+
+these are some common ways to use Delve as a server
+```
+dlv attach --headless # attach t a running process
+dlv debug --headless # compiles and starts the debugging session
+dlv exec --headless # runs a pre compiled binary and starts the debugging session
+```
+
+## Remote debugging
+
+In our scenario, we'll make Delve to attach to a running process using:
+
+```
+dlv --listen=:4242 --headless=true --api-version=2 --accept-multiclient attach PID
+```
+
+where:
+
+```
+--listen: Debugging server listen address. (default "127.0.0.1:0")
+
+--api-version:  Selects JSON-RPC API version when headless.
+  New clients should use v2. Can be reset via RPCServer.SetApiVersion.
+  See Documentation/api/json-rpc/README.md. (default 1)
+
+--accept-multiclient: Allows a headless server to accept multiple client connections via JSON-RPC or DAP.
+```
+
+## Remote debugging
+
+Connecting to it is where things start to differ depending on each setup.
+
+The most generic form is using Delve as a client:
+
+```
+dlv connect addr [flags]
+dlv connect 192.168.56.42:4242
+```
+
+Which will give you a CLI interface. You can check the docs [here](https://github.com/go-delve/delve/tree/master/Documentation/cli).
+
+## Remote debugging: GoLand
+
+.image imgs/goland.remote.debug.png _ 700
+
+## Remote debugging: VS Code
+
+VS Code is a bit different, it'll use the Debug Adaptor Protocol (DAP). Which
+is different from what `dlv [command] --headless` uses.
+
+Instead of passing the `--headless` flag, start the Delve DAP server with
+
+```
+dlv dap
+```
+
+and then use VS Code to connect to it.
+
+The `dlv dap` is not compatible with `dlv connect` or GoLand
+
+Check the [VS Code debugging](https://github.com/golang/vscode-go/blob/master/docs/debugging.md#attach) docs for more details.
+
+## A catch: where is the source code?
+
+Depending on how you're running the remote debug session you might find that
+Delve isn't finding the source code.
+
+In short it happens because the path where the source code was compiled is different
+from the path where Delve is executed from. This can be fixed with `config substitute-path`:
+
+```
+(dlv) config substitute-path /original/path /new/path
+```
+
+## Demo time!
+
+## Questions?
+
+Thank you!

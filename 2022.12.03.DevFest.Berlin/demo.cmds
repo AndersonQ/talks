@@ -1,0 +1,46 @@
+# Elastic Agent installed and running
+# 1st terminal
+ps aux | grep elastic-agent
+dlv --listen=:4242 --headless=true --api-version=2 --accept-multiclient attach PID
+
+# 2nd terminal
+cd /home/ainsoph/devel/github.com/elastic/elastic-agent # go to where your agent's src code is located
+dlv connect 192.168.56.42:4242
+# inside delve session
+(dlv) b reporter.go:212
+# Command failed: Location "reporter.go:212" ambiguous:
+# /go/pkg/mod/github.com/elastic/elastic-agent-libs@v0.2.6/monitoring/report/buffer/reporter.go,
+# /go/src/github.com/elastic/elastic-agent/internal/pkg/core/status/reporter.go,
+# /go/src/github.com/elastic/elastic-agent/internal/pkg/reporter/log/reporter.go,
+# /go/src/github.com/elastic/elastic-agent/internal/pkg/reporter/reporter.go…
+
+(dlv) b /go/src/github.com/elastic/elastic-agent/internal/pkg/core/status/reporter.go:212
+(dlv) c
+
+# 3rd terminal
+/opt/Elastic/Agent/elastic-agent status
+
+# 2nd terminal
+# stops, but where is the code?
+p r.appReporters
+c // should see status command output on terminal 3
+
+# 3rd terminal
+/opt/Elastic/Agent/elastic-agent status
+
+# 2nd terminal
+bp
+clear 1
+config substitute-path /go/src/github.com/elastic/elastic-agent /home/ainsoph/devel/github.com/elastic/elastic-agent
+b /home/ainsoph/devel/github.com/elastic/elastic-agent/internal/pkg/core/status/reporter.go:212
+c
+
+# 3rd terminal
+/opt/Elastic/Agent/elastic-agent status
+
+# 2nd terminal
+// it works!
+p r.appReporters
+gr
+grs
+q
