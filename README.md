@@ -2,6 +2,7 @@
 
 Here I list all my talks :)
 
+ - [2023 - Logging: Best Practices and Tools](2023.07.06.HTW.SoSe23.Lecture)
  - [2022 - Debugging complex applications in Go](2022.11.09.GDG.Berlin.Golang)
  - [2022 - Event Sourcing with Go](2022.03.10.Golang.Live)
  - [2021 - Monitoring applications with OpenTelemetry](2021.11.13.Gophers.Nigeria.Meetup)
