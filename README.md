@@ -2,6 +2,7 @@
 
 Here I list all my talks :)
 
+ - [2025 - The Performance Paradox: When Slower Code Doesn't Slow You Down](2025.11.22.DevFest.Berlin)
  - [2023 - Logging: Best Practices and Tools](2023.07.06.HTW.SoSe23.Lecture)
  - [2022 - Debugging complex applications in Go](2022.11.09.GDG.Berlin.Golang)
  - [2022 - Event Sourcing with Go](2022.03.10.Golang.Live)
