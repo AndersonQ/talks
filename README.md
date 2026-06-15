@@ -2,6 +2,7 @@
 
 Here I list all my talks :)
 
+ - [2026 - The Performance Paradox: When Slower Code Doesn't Slow You Down - GopherCon Europe Berlin](2026.06.16.GopherConEurope)
  - [2025 - The Performance Paradox: When Slower Code Doesn't Slow You Down - DevFest Berlin](2025.11.22.DevFest.Berlin)
  - [2023 - Logging: Best Practices and Tools - HTW Berlin](2023.07.06.HTW.SoSe23.Lecture)
  - [2022 - Debugging complex Go applications - DevFest Berlin](2022.12.03.DevFest.Berlin)
